@@ -11,7 +11,6 @@ import time
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
 
-#Test
 
 
 
