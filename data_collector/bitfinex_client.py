@@ -10,6 +10,8 @@ logger = logging.getLogger()
 config = {} #TRADES : which pairs
 
 
+
+
 class BitfinexClient():
 
 
@@ -25,6 +27,17 @@ class BitfinexClient():
     def stop(self):
         self.ws.close()
         self.ws.join()
+
+
+
+    ##################################
+    # Subscribing/Unsubscribing
+    ##################################
+
+    #TODO Implement
+
+
+
 
 
 

@@ -25,7 +25,10 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
 
         self._uri = kwargs['uri']
         self._info = kwargs['info']
-        self.connected = Event()
+
+        #Keep State of WS
+        self._connected = Event()
+
 
 
 
@@ -38,6 +41,9 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def run(self):
         self.connect()
 
+    ##############################
+    #Properties
+    ##############################
 
     @property
     def info(self):
@@ -47,20 +53,43 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def uri(self):
         return self._uri
 
+    @property
+    def connected(self):
+        return self._connected.is_set()
+
+    ##############################
+    #Static Methods
+    ##############################
     @staticmethod
     def _on_open(func):
         def inner(self, *args):
-            self.connected.set()
+            self._connected.set()
             return func(self, *args)
 
         return inner
+
 
     @staticmethod
     def _on_close(func):
         def inner(self, *args):
-            self.connected.clear()
+            self._connected.clear()
             return func(self, *args)
         return inner
+
+    @staticmethod
+    def _is_connected(func):
+        def inner(self, *args, **kwargs):
+            if self.ws and self.ws._connected.is_set():
+                return func(self, *args, **kwargs)
+            else:
+                logger.error('Web Socket not connected: %s()', func.__name__)
+                return None
+
+        return inner
+
+    ##############################
+    #Abstract Methods
+    ##############################
 
     @abc.abstractmethod
     def on_message(self,*args):
@@ -78,6 +107,9 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def on_open(self,*args):
         return
 
+    ##############################
+    #Decorators
+    ##############################
 
     def _connect_wrapper(func):
         """Generic Wrapper"""
@@ -105,6 +137,10 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
             return func(self,*args,**kwargs)
         return inner
 
+
+    ##############################
+    #Basic Functions
+    ##############################
 
     @_connect_wrapper
     def connect(self,*args,**kwargs):
