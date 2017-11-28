@@ -16,11 +16,18 @@ class BitfinexClient():
     def __init__(self,**ws_args):
 
         self.ws = BitfinexWebsocket(**ws_args)
+
+
+
+    def start(self):
         self.ws.start()
 
+    def stop(self):
+        self.ws.close()
+        self.ws.join()
 
-    def methods(self):
-        pass
+
+
 
 
 
@@ -42,7 +49,7 @@ class BitfinexClient():
 
 def bitfinex_client_logic():
     bc = BitfinexClient(uri="wss://api.bitfinex.com/ws",info='WebSocket')
-
+    bc.start()
 
 if __name__ == "__main__":
     logger.info("Starting BitFinex Collector Instance")

@@ -1,5 +1,6 @@
 import websocket
 from threading import Thread
+from threading import Event
 import time
 from datetime import datetime
 import logging
@@ -12,6 +13,9 @@ fileConfig('logging_config.ini')
 logger = logging.getLogger()
 
 
+
+
+
 class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
 
 
@@ -21,6 +25,8 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
 
         self._uri = kwargs['uri']
         self._info = kwargs['info']
+        self.connected = Event()
+
 
 
     def __repr__(self):
@@ -41,6 +47,20 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def uri(self):
         return self._uri
 
+    @staticmethod
+    def _on_open(func):
+        def inner(self, *args):
+            self.connected.set()
+            return func(self, *args)
+
+        return inner
+
+    @staticmethod
+    def _on_close(func):
+        def inner(self, *args):
+            self.connected.clear()
+            return func(self, *args)
+        return inner
 
     @abc.abstractmethod
     def on_message(self,*args):
@@ -57,6 +77,7 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def on_open(self,*args):
         return
+
 
     def _connect_wrapper(func):
         """Generic Wrapper"""
