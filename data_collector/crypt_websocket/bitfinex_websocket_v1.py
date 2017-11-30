@@ -1,10 +1,10 @@
 
-from threading import Thread
 import json
 from .abstract_websocket import AbstractWebSocket
 from logging.config import fileConfig
 import logging
 import time
+
 
 
 #TODO move to __init__.py
@@ -14,13 +14,17 @@ logger = logging.getLogger()
 
 
 
-class BitfinexWebsocket(AbstractWebSocket):
+class BitfinexWebsocket_v1(AbstractWebSocket):
     """
     Implement Bitfinex Protocol V1
     """
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
+
+
+
+
 
 
     #########################
@@ -47,6 +51,10 @@ class BitfinexWebsocket(AbstractWebSocket):
         msg_dict,receive_ts = json.loads(args[1]), time.time()
         print(msg_dict)
 
+
+        #TODO handle: heartbeats, event_messages, responses to mesagges, reconnects
+
+
     @AbstractWebSocket._on_close
     def on_close(self,*args):
         print('Closed')
@@ -59,10 +67,6 @@ class BitfinexWebsocket(AbstractWebSocket):
 
     def on_error(self,*args):
         logger.error( 'Arguments: ' + args)
-
-
-
-
 
 
 

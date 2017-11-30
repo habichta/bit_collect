@@ -2,7 +2,7 @@ from logging.config import fileConfig
 import logging
 from threading import Thread
 import time
-from crypt_websocket.bitfinex_websocket_v1 import BitfinexWebsocket
+from crypt_websocket.bitfinex_websocket_v1 import BitfinexWebsocket_v1
 
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
@@ -18,11 +18,12 @@ class BitfinexClient():
 
     def __init__(self,**ws_args):
 
-        self.ws = BitfinexWebsocket(**ws_args)
+        self.ws = BitfinexWebsocket_v1(**ws_args)
 
     def connect(self):
         self.ws.start()
         while not self.ws.connected:
+            #Wait for WebSocket Thread to establish connection
             print('Establishing Connection to ', self.ws.uri)
             time.sleep(1)
 
@@ -33,6 +34,9 @@ class BitfinexClient():
 
 
 
+    ##################################
+    # Open Channels
+    ##################################
     ##################################
     # Subscribing/Unsubscribing
     ##################################
@@ -60,7 +64,7 @@ class BitfinexClient():
 
 def bitfinex_client_logic():
     bc = BitfinexClient(uri="wss://api.bitfinex.com/ws",info='WebSocket')
-    #bc.connect()
+    bc.connect()
 
 
     bc.subscribe_to_ticker(pair='BTCUSD')

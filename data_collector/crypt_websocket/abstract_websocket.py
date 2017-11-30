@@ -7,6 +7,7 @@ import logging
 from logging.config import fileConfig
 import abc
 import threading
+import collections
 
 #TODO move to __init__.py
 fileConfig('logging_config.ini')
@@ -25,6 +26,10 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
         self._ws = None
         self._uri = kwargs['uri']
         self._info = kwargs['info']
+
+        #Abstract State Machine for connection state
+        rec_dict = lambda: collections.defaultdict(rec_dict) #recursive dictionary, lambda factory
+        self._state_machine = rec_dict()
 
         #Keep State of WS
         self._connected = Event()
@@ -60,6 +65,10 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     @property
     def ws(self):
         return self._ws
+
+    @property
+    def state_machine(self):
+        return self._state_machine
 
     ##############################
     #Static Methods
