@@ -8,6 +8,7 @@ from logging.config import fileConfig
 import abc
 import threading
 import collections
+from queue import Queue
 
 #TODO move to __init__.py
 fileConfig('logging_config.ini')
@@ -17,22 +18,21 @@ logger = logging.getLogger()
 
 
 
-class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
+class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
 
 
     def __init__(self,**kwargs):
 
-        super(AbstractWebSocket,self).__init__()
+        super(AbstractWebSocketProducer,self).__init__()
         self._ws = None
         self._uri = kwargs['uri']
         self._info = kwargs['info']
 
-        #Abstract State Machine for connection state
-        rec_dict = lambda: collections.defaultdict(rec_dict) #recursive dictionary, lambda factory
-        self._state_machine = rec_dict()
-
         #Keep State of WS
         self._connected = Event()
+
+        #Inter-Thread Communication
+        self.producer_consumer_queue = kwargs['pc_queue']
 
 
 
@@ -45,6 +45,7 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
 
     def run(self):
         self.connect()
+
 
     ##############################
     #Properties
@@ -66,9 +67,7 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def ws(self):
         return self._ws
 
-    @property
-    def state_machine(self):
-        return self._state_machine
+
 
     ##############################
     #Static Methods
@@ -183,17 +182,38 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
             logger.error('send() failed for' + kwargs + ', trace:' + str(e))
 
 
-        
+class AbstractWebSocketConsumer(Thread,metaclass=abc.ABCMeta):
+
+    def __init__(self,**kwargs):
+
+        super(AbstractWebSocketConsumer,self).__init__()
+        # Abstract State Machine for connection state
+        rec_dict = lambda: collections.defaultdict(rec_dict)  # recursive dictionary, lambda factory
+        self._state_machine = rec_dict()
+
+        # Inter-Thread Communication
+        self._queue = Queue()
+
+
+    ##############################
+    #Properties
+    ##############################
+    @property
+    def state_machine(self):
+        return self._state_machine
+
+    @property
+    def pc_queue(self): #Producer-consumer queue
+        return self._queue
 
 
 
-
-
-
-        
-        
-    
-    
+    ##############################
+    # Abstract Methods
+    ##############################
+    @abc.abstractmethod
+    def run(self):
+        return
 
 
 
