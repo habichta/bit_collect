@@ -1,7 +1,8 @@
 from logging.config import fileConfig
 import logging
 from threading import Thread
-from bitfinex_websocket import BitfinexWebsocket
+import time
+from crypt_websocket.bitfinex_websocket_v1 import BitfinexWebsocket
 
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
@@ -19,14 +20,16 @@ class BitfinexClient():
 
         self.ws = BitfinexWebsocket(**ws_args)
 
-
-
-    def start(self):
+    def connect(self):
         self.ws.start()
+        while not self.ws.connected:
+            print('Establishing Connection to ', self.ws.uri)
+            time.sleep(1)
 
-    def stop(self):
+    def disconnect(self):
         self.ws.close()
-        self.ws.join()
+        if self.ws is not None and self.ws.ident:
+            self.ws.join()
 
 
 
@@ -34,7 +37,11 @@ class BitfinexClient():
     # Subscribing/Unsubscribing
     ##################################
 
-    #TODO Implement
+    def subscribe_to_trades(self, pair):
+        self.ws.bitfinex_subscribe(channel='trades', pair=pair)
+
+    def subscribe_to_ticker(self, pair):
+        self.ws.bitfinex_subscribe(channel='ticker', pair=pair)
 
 
 
@@ -47,22 +54,22 @@ class BitfinexClient():
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+   ##################################
+    # Client Logic and Main
+    ##################################
 
 def bitfinex_client_logic():
     bc = BitfinexClient(uri="wss://api.bitfinex.com/ws",info='WebSocket')
-    bc.start()
+    #bc.connect()
+
+
+    bc.subscribe_to_ticker(pair='BTCUSD')
+    bc.subscribe_to_trades(pair='BTCUSD')
+
+    time.sleep(5)
+
+    bc.disconnect()
+
 
 if __name__ == "__main__":
     logger.info("Starting BitFinex Collector Instance")

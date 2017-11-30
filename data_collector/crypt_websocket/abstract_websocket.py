@@ -22,7 +22,7 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def __init__(self,**kwargs):
 
         super(AbstractWebSocket,self).__init__()
-
+        self._ws = None
         self._uri = kwargs['uri']
         self._info = kwargs['info']
 
@@ -57,6 +57,10 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     def connected(self):
         return self._connected.is_set()
 
+    @property
+    def ws(self):
+        return self._ws
+
     ##############################
     #Static Methods
     ##############################
@@ -79,10 +83,10 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     @staticmethod
     def _is_connected(func):
         def inner(self, *args, **kwargs):
-            if self.ws and self.ws._connected.is_set():
+            if self.ws and self.connected:
                 return func(self, *args, **kwargs)
             else:
-                logger.error('Web Socket not connected: %s()', func.__name__)
+                logger.error('Web Socket not connected')
                 return None
 
         return inner
@@ -143,20 +147,33 @@ class AbstractWebSocket(Thread,metaclass=abc.ABCMeta):
     ##############################
 
     @_connect_wrapper
-    def connect(self,*args,**kwargs):
-        self.ws = websocket.WebSocketApp(self._uri, on_message=self.on_message, on_open=self.on_open,
-                                         on_error=self.on_error,
-                                         on_close=self.on_close)
-        self.ws.run_forever()
+    def connect(self):
+        try:
+            self._ws = websocket.WebSocketApp(self._uri, on_message=self.on_message, on_open=self.on_open,
+                                             on_error=self.on_error,
+                                             on_close=self.on_close)
+            self._ws.run_forever()
+        except websocket.WebSocketException as e:
+            logger.error('connect() failed, trace:' + str(e))
 
+    @_is_connected.__func__
     @_close_wrapper
-    def close(self,*args,**kwargs):
-        self.ws.close()
+    def close(self):
+        try:
+            self._ws.close()
+        except websocket.WebSocketException as e:
+            logger.error('close() failed, trace:' + str(e))
 
-
+    @_is_connected.__func__
     @_send_wrapper
-    def send(self,*args,**kwargs):
-        self.ws.send(kwargs['data'])
+    def send(self,protocol_func,**kwargs):
+        payload = protocol_func(**kwargs)
+        try:
+            self._ws.send(payload)
+        except websocket.WebSocketException as e:
+            logger.error('send() failed for' + kwargs + ', trace:' + str(e))
+
+
         
 
 

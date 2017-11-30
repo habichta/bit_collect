@@ -1,7 +1,7 @@
 
 from threading import Thread
 import json
-from abstract_websocket import AbstractWebSocket
+from .abstract_websocket import AbstractWebSocket
 from logging.config import fileConfig
 import logging
 import time
@@ -20,8 +20,28 @@ class BitfinexWebsocket(AbstractWebSocket):
     """
 
     def __init__(self,**kwargs):
-        print(kwargs)
         super().__init__(**kwargs)
+
+
+    #########################
+    # Exchange Protocol
+    #########################
+
+    def bitfinex_send_protocol(self, api_key=None, secret=None, auth=False, **kwargs):
+        #TODO  Authentication
+
+        payload = json.dumps(kwargs)
+
+        return payload
+
+    def bitfinex_subscribe(self, channel, **r_args):
+        request = {'event': 'subscribe', 'channel': channel}
+        request.update(r_args)
+        self.send(self.bitfinex_send_protocol, **request)
+
+    #########################
+    #Callbacks
+    #########################
 
     def on_message(self,*args):
         msg_dict,receive_ts = json.loads(args[1]), time.time()
@@ -29,15 +49,12 @@ class BitfinexWebsocket(AbstractWebSocket):
 
     @AbstractWebSocket._on_close
     def on_close(self,*args):
-        pass
+        print('Closed')
+
 
     @AbstractWebSocket._on_open
     def on_open(self,*args):
-
-
-
-        t = json.dumps({"event": "subscribe","channel":"trades","pair":"BTCUSD"})
-        self.send(data=t)
+        pass
 
 
     def on_error(self,*args):
