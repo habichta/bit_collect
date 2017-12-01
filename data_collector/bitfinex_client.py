@@ -29,7 +29,7 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
         self.connect()
 
-        self.subscribe_to_ticker(pair='BTCUSD')
+        #self.subscribe_to_ticker(pair='BTCUSD')
         self.subscribe_to_trades(pair='BTCUSD')
 
         time.sleep(5)

@@ -9,6 +9,7 @@ import abc
 import threading
 import collections
 from queue import Queue
+import queue
 
 #TODO move to __init__.py
 fileConfig('logging_config.ini')
@@ -222,7 +223,15 @@ class AbstractWebSocketConsumer(Thread,metaclass=abc.ABCMeta):
     def run(self):
         return
 
+    ##############################
+    # Consumer Methods
+    ##############################
+    def pop_and_handle(self, handle_func, block=False, timeout=None, **kwargs):
 
-
+        try:
+            payload = self.pc_queue.get(block=block, timeout=timeout)
+            handle_func(payload=payload, **kwargs)
+        except Queue.Empty as e:  # Move on
+            logger.debug('No messages in producer-consumer queue, '+str(e))
 
 

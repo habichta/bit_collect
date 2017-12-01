@@ -5,12 +5,18 @@ from logging.config import fileConfig
 from threading import Thread
 import logging
 import time
+import queue
 
 
 
 #TODO move to __init__.py
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
+logger.setLevel('DEBUG')
+
+
+
+
 
 
 
@@ -41,13 +47,13 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
         self.send(self.bitfinex_send_protocol, **request)
 
     #########################
-    #Callbacks
+    #Producer Callbacks
     #########################
 
     def on_message(self,*args):
         msg_dict,receive_ts = json.loads(args[1]), time.time()
         self.pc_queue.put((receive_ts,msg_dict))
-        print(msg_dict)
+        logger.debug(msg_dict)
 
     @AbstractWebSocketProducer._on_close
     def on_close(self,*args):
@@ -76,6 +82,13 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.ws = BitfinexWebsocketProducer_v1(pc_queue=self.pc_queue,**kwargs)
 
 
+        #Protocol switch
+        self.pl_type_switch = {'event':self.handle_event,'data':self.handle_data}
+        self.pl_event_switch = {'event': self.handle_event, 'data': self.handle_data}
+
+
+        # Event: info,error,subscribed,unsubsribed, ping,pong
+
     ##################################
     # Connect/Disconnect
     ##################################
@@ -98,7 +111,51 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ##################################
 
     #TODO Pop from queue, handle dict or list responses
-    #Event: info,error,subscribed,unsubsribed, ping,pong
+
+
+
+
+
+
+    def payload_handler(self,**kwargs):
+
+        receive_ts, msg = kwargs['payload']
+
+    def handle_event(self,**kwargs):
+        pass
+
+    def handle_data(self, **kwargs):
+        pass
+
+
+
+    ##################################
+    # Consumer Callbacks
+    ##################################
+    ##################################
+    # Bitfinex Events
+    ##################################
+
+    def handle_info_event(self,**kwargs):
+        pass
+    def handle_error_event(self,**kwargs):
+        pass
+
+    def handle_subscribed_event(self,**kwargs):
+        pass
+
+    def handle_unsubscribed_event(self,**kwargs):
+        pass
+
+    def handle_pong_event(self,**kwargs):
+        pass
+
+
+    ##################################
+    # Bitfinex Data
+    ##################################
+
+
 
 
     ##################################
