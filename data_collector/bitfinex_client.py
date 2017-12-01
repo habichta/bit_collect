@@ -16,10 +16,14 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
         super().__init__(**kwargs)
 
 
-        ##################################
-
+    ##################################
     # Client Logic and Main
     ##################################
+
+    def initialize_connection(self):
+        #TODO all subscriptions or auth .. etc.
+        pass
+
 
     def run(self):
         self.connect()
@@ -29,7 +33,7 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
         while True:
             self.pop_and_handle(handle_func=self._payload_handler)
-            time.sleep(1)
+            time.sleep(0.5)
 
         self.disconnect()
 

@@ -211,6 +211,10 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def run(self):
         return
 
+    @abc.abstractmethod
+    def initialize_connection(self):
+        return
+
     ##############################
     # Consumer Methods
     ##############################
