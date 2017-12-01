@@ -231,7 +231,8 @@ class AbstractWebSocketConsumer(Thread,metaclass=abc.ABCMeta):
         try:
             payload = self.pc_queue.get(block=block, timeout=timeout)
             handle_func(payload=payload, **kwargs)
-        except Queue.Empty as e:  # Move on
+        except queue.Empty as e:  # Move on
+
             logger.debug('No messages in producer-consumer queue, '+str(e))
 
 

@@ -83,8 +83,12 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
 
         #Protocol switch
-        self.pl_type_switch = {'event':self.handle_event,'data':self.handle_data}
-        self.pl_event_switch = {'event': self.handle_event, 'data': self.handle_data}
+        self.pl_type_switch = {'event':self._handle_event,'data':self._handle_data}
+        self.pl_event_switch = {'info': self._handle_info_event,
+                                'error': self._handle_error_event,
+                                'subscribed':self._handle_subscribed_event,
+                                'unsubscribed':self._handle_unsubscribed_event,
+                                'pong': self._handle_pong_event}
 
 
         # Event: info,error,subscribed,unsubsribed, ping,pong
@@ -101,6 +105,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def disconnect(self):
         self.ws.close()
+        #TODO reset state machine
         if self.ws is not None and self.ws.ident: #Check if Producer Websocket Thread is running
             self.ws.join()
 
@@ -110,21 +115,27 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     # Handle Producer-Consumer Queue
     ##################################
 
-    #TODO Pop from queue, handle dict or list responses
+
+    def _payload_handler(self,payload,**kwargs): #as argument to pop_and_handle
+
+
+        if isinstance(payload[1], dict): #events are dictionaries
+            self.pl_type_switch['event'](payload=payload,**kwargs)
+        else: # data is a list
+            self.pl_type_switch['data'](payload=payload,**kwargs)
 
 
 
+    def _handle_event(self,payload,**kwargs):
+
+        event_type = payload[1]['event']
+        try:
+            self.pl_event_switch[event_type](payload=payload,**kwargs)
+        except KeyError as e:
+            logger.error(str(e) + ', got: '+ str(event_type))
 
 
-
-    def payload_handler(self,**kwargs):
-
-        receive_ts, msg = kwargs['payload']
-
-    def handle_event(self,**kwargs):
-        pass
-
-    def handle_data(self, **kwargs):
+    def _handle_data(self, **kwargs):
         pass
 
 
@@ -136,19 +147,26 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     # Bitfinex Events
     ##################################
 
-    def handle_info_event(self,**kwargs):
-        pass
-    def handle_error_event(self,**kwargs):
-        pass
+    def _handle_info_event(self,payload,**kwargs):
 
-    def handle_subscribed_event(self,**kwargs):
-        pass
+        print(payload)
 
-    def handle_unsubscribed_event(self,**kwargs):
-        pass
+    def _handle_error_event(self,payload,**kwargs):
+        print(payload)
 
-    def handle_pong_event(self,**kwargs):
-        pass
+
+    def _handle_subscribed_event(self,payload,**kwargs):
+        print(payload)
+
+
+    def _handle_unsubscribed_event(self,payload,**kwargs):
+
+        print(payload)
+
+
+    def _handle_pong_event(self,payload,**kwargs):
+        print(payload)
+
 
 
     ##################################
