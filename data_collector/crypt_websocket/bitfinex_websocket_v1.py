@@ -17,14 +17,11 @@ logger = logging.getLogger()
 
 class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
     """
-    Implement Bitfinex Protocol V1
+    Implement Bitfinex Protocol V1, Producer side
     """
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
-
-
-
 
 
 
@@ -33,7 +30,6 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
     #########################
 
     def bitfinex_send_protocol(self, api_key=None, secret=None, auth=False, **kwargs):
-        #TODO  Authentication
 
         payload = json.dumps(kwargs)
 
@@ -50,23 +46,23 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
 
     def on_message(self,*args):
         msg_dict,receive_ts = json.loads(args[1]), time.time()
+        self.pc_queue.put((receive_ts,msg_dict))
         print(msg_dict)
-
-
-        #TODO handle: heartbeats, event_messages, responses to mesagges, reconnects
-
 
     @AbstractWebSocketProducer._on_close
     def on_close(self,*args):
+        #TODO Sentinel?
         print('Closed')
 
 
     @AbstractWebSocketProducer._on_open
     def on_open(self,*args):
+        #TODO Authentication methods
         pass
 
 
     def on_error(self,*args):
+        #TODO Sentinel?
         logger.error( 'Arguments: ' + str(args))
 
 
@@ -78,8 +74,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         super().__init__(**kwargs)
 
         self.ws = BitfinexWebsocketProducer_v1(pc_queue=self.pc_queue,**kwargs)
-
-
 
 
     ##################################
@@ -94,8 +88,17 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def disconnect(self):
         self.ws.close()
-        if self.ws is not None and self.ws.ident:
+        if self.ws is not None and self.ws.ident: #Check if Producer Websocket Thread is running
             self.ws.join()
+
+
+
+    ##################################
+    # Handle Producer-Consumer Queue
+    ##################################
+
+    #TODO Pop from queue, handle dict or list responses
+    #Event: info,error,subscribed,unsubsribed, ping,pong
 
 
     ##################################

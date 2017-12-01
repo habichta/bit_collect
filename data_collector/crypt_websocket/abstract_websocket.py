@@ -31,8 +31,11 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
         #Keep State of WS
         self._connected = Event()
 
-        #Inter-Thread Communication
-        self.producer_consumer_queue = kwargs['pc_queue']
+        #Inter-Thread Communication, Producer-consumer queue
+        self.pc_queue = kwargs['pc_queue']
+
+        #Shutdown signal
+        self._sentinel = object()
 
 
 
@@ -66,6 +69,10 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
     @property
     def ws(self):
         return self._ws
+
+    @property
+    def sentinel(self):
+        return self._sentinel
 
 
 
