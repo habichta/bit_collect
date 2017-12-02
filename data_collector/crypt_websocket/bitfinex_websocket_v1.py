@@ -1,8 +1,11 @@
 import json
-from .abstract_websocket import AbstractWebSocketProducer, AbstractWebSocketConsumer
+from .abstract_websocket import AbstractWebSocketProducer, AbstractWebSocketConsumer,WebSocketHelpers
 from logging.config import fileConfig
 import logging
+import hmac
+import hashlib
 import time
+
 from pprint import pprint
 
 # TODO move to __init__.py
@@ -77,12 +80,15 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         # Done Refreshing data from the Trading Engine. Resume normal activity. Advised to
         # unsubscribe / subscribe again all channels.
 
-        self.error_codes = ['10000', '10001']
-        # Unkown event, Unkown pair
-
+        self.error_codes = ['10000', '10001','10300','10301','10302','10400','10401']
+        # Unkown event, Unkown pair, Subscription failed(generic), Already subscribed, Unknown channel,
+        # Unsubscription failed(generic), Not subscribed
+        
         self.auth_error_codes = ['10100', '10101', '10102', '10103', '10104', '10201']
         # Authentication failure(generic), Already authenticated, Authentication Payload Error,
         # Authentication Signature Error, Authentication HMAC Error, Not authenticated
+
+        self.ev_subscription_fields = []
 
     ########################################################
     # Client Interface Functions
@@ -91,7 +97,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.ws.start()
         while not self.ws.connected:
             # Wait for WebSocket Thread to establish connection
-            print('Establishing Connection to ', self.ws.uri)
+            logger.info('Establishing Connection to ' + str(self.ws.uri))
             time.sleep(1)
 
     def disconnect(self):
@@ -143,6 +149,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             self.pl_event_switch[event_type](payload=payload, **kwargs)
         except KeyError as e:
             logger.error(str(e) + ', got: ' + str(event_type))
+        except Exception as e:
+            logger.error(str(e) + ', got: ' + str(event_type))
+
 
     def _handle_data(self, **kwargs):
         pass
@@ -156,27 +165,51 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def _handle_info_event(self, payload, **kwargs):
 
-        msg = payload[1]
+        msg = payload[1] #Json message
+        ts = payload[0] #Receive time stamp
 
         if 'version' in msg:
-            self.state_machine['version'] = msg['version']
+            self.state_machine['version'] = (ts,msg['version'])
 
         elif 'code' in msg:
             info_code = msg['code']
             if info_code in self.info_codes:
-                self.state_machine['info_code'] = msg['code']
-                logger.info(msg['code'] + ': ' + msg['msg'])
+                try:
+                    info_message =  msg['msg']
+                except KeyError:
+                    info_message = 'no message field'
+
+                self.state_machine['info_code'] = (ts,info_message)
+                logger.info(str(ts)+ ': ' + msg['code'] + ': ' + info_message)
             else:
-                logger.error('Unknown info code: ', str(info_code))
+                logger.error(str(ts)+': Unknown info code: ', str(info_code))
         else:
-            logger.error('Unknown info message: ' + str(msg))
+            logger.error(str(ts)+': Unknown info message: ' + str(msg))
 
     def _handle_error_event(self, payload, **kwargs):
         print(payload)
 
     def _handle_subscribed_event(self, payload, **kwargs):
-        # TODO
-        print(payload)
+
+        ts,msg = payload[0],payload[1]  # Json message
+        channel,chanId = msg['channel'],msg['chanId'] # Receive time stamp
+
+
+        #type,pair,state,hb
+
+        #precicion freq length
+
+
+        #type to id
+
+
+        if WebSocketHelpers.any_in(['trades','ticker'],channel):
+
+        elif WebSocketHelpers.any_in(['trades','ticker'],channel):
+
+
+
+
 
     def _handle_unsubscribed_event(self, payload, **kwargs):
 
@@ -186,8 +219,36 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         print(payload)
 
 
+    def _check_protocol_sanity(self):
+        pass
 
 
-        ##################################
-        # Bitfinex Data
-        ##################################
+    ##################################
+    # Bitfinex Data
+    ##################################
+
+
+
+    ##################################
+    # Authentication/Security
+    ##################################
+
+    def _create_authentication_payload(self,api_secret,api_key):
+
+        nonce = int(time.time() * 1000000)
+        auth_payload = 'AUTH{}'.format(nonce)
+        signature = hmac.new(
+            api_secret.encode(),
+            msg=auth_payload.encode(),
+            digestmod=hashlib.sha384
+        ).hexdigest()
+
+        auth_payload = {
+            'apiKey': api_key,
+            'event': 'auth',
+            'authPayload': auth_payload,
+            'authNonce': nonce,
+            'authSig': signature
+        }
+
+        return auth_payload

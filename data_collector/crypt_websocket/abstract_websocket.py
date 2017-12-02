@@ -187,8 +187,8 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
         super(AbstractWebSocketConsumer, self).__init__()
         # Abstract State Machine for connection state
-        rec_dict = lambda: collections.defaultdict(rec_dict)  # recursive dictionary, lambda factory
-        self._state_machine = rec_dict()
+
+        self._state_machine = WebSocketHelpers.recursive_dict()
 
         # Inter-Thread Communication
         self._queue = Queue()
@@ -226,3 +226,18 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
         except queue.Empty as e:  # Move on
 
             logger.debug('No messages in producer-consumer queue, ' + str(e))
+
+class WebSocketHelpers:
+
+    @staticmethod
+    def any_in(a,b):
+        return any(i in b for i in a)
+
+    @staticmethod
+    def all_in(a, b):
+        return all(i in b for i in a)
+
+    @staticmethod
+    def recursive_dict():
+        rec_dict = lambda: collections.defaultdict(rec_dict)  # recursive dictionary, lambda factory
+        return rec_dict()

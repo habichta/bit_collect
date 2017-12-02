@@ -30,6 +30,7 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
         # self.subscribe_to_ticker(pair='BTCUSD')
         self.subscribe_to_trades(pair='BTCUSD')
+        self.subscribe_to_trades(pair='LTCUSD')
 
         while True:
             self.pop_and_handle(handle_func=self._payload_handler)
