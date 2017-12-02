@@ -88,7 +88,11 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         # Authentication failure(generic), Already authenticated, Authentication Payload Error,
         # Authentication Signature Error, Authentication HMAC Error, Not authenticated
 
-        self.ev_subscription_fields = []
+        self.ev_all_subscribed_fields = ['events','channel','chanId','pair']
+        self.ev_add_orderbook_subscribed_fields = ['prec','freq','len']
+        self.ev_add_raworderbook_subscribed_fields = ['prec','len']
+
+
 
     ########################################################
     # Client Interface Functions
@@ -137,6 +141,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
         logger.debug(payload)
 
+        self.state_machine['hb'] = payload[0] #Update global Heartbeat with timestamp
+
         if isinstance(payload[1], dict):  # events are dictionaries
             self.pl_type_switch['event'](payload=payload, **kwargs)
         else:  # data is a list
@@ -169,18 +175,21 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         ts = payload[0] #Receive time stamp
 
         if 'version' in msg:
-            self.state_machine['version'] = (ts,msg['version'])
+            self.state_machine['version']['_v'] = msg['version']
+            self.state_machine['version']['_ts'] = ts
 
         elif 'code' in msg:
-            info_code = msg['code']
+            info_code = str(msg['code'])
             if info_code in self.info_codes:
                 try:
-                    info_message =  msg['msg']
+                    info_message =  str(msg['msg'])
                 except KeyError:
-                    info_message = 'no message field'
+                    info_message = None
 
-                self.state_machine['info_code'] = (ts,info_message)
-                logger.info(str(ts)+ ': ' + msg['code'] + ': ' + info_message)
+                self.state_machine['info'][info_code]['_ts'] = ts
+                self.state_machine['info'][info_code]['_msg'] = info_message
+
+                logger.info(str(ts)+ ': ' + info_code+ ': ' + info_message)
             else:
                 logger.error(str(ts)+': Unknown info code: ', str(info_code))
         else:
@@ -192,23 +201,12 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     def _handle_subscribed_event(self, payload, **kwargs):
 
         ts,msg = payload[0],payload[1]  # Json message
-        channel,chanId = msg['channel'],msg['chanId'] # Receive time stamp
+        chanId = str(msg['chanId'])
 
-
-        #type,pair,state,hb
-
-        #precicion freq length
-
-
-        #type to id
-
-
-        if WebSocketHelpers.any_in(['trades','ticker'],channel):
-
-        elif WebSocketHelpers.any_in(['trades','ticker'],channel):
-
-
-
+        for k,v in msg.items():
+            self.state_machine[chanId]['_'+str(k)] = v  # Channel ID
+        self.state_machine[chanId]['_ts'] = ts  # Subscrition Time stamp
+        self.state_machine[chanId]['_hb'] = ts  # Time stamp last message (Channel Heartbeat)
 
 
     def _handle_unsubscribed_event(self, payload, **kwargs):
