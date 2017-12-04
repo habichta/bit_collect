@@ -208,10 +208,12 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.state_machine[chanId]['_ts'] = ts  # Subscrition Time stamp
         self.state_machine[chanId]['_hb'] = ts  # Time stamp last message (Channel Heartbeat)
 
+        #Mapping chan,pair to id
 
     def _handle_unsubscribed_event(self, payload, **kwargs):
+        pass
 
-        print(payload)
+
 
     def _handle_pong_event(self, payload, **kwargs):
         print(payload)
