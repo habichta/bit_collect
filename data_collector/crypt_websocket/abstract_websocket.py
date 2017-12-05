@@ -96,7 +96,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         return inner
 
     ##############################
-    # Abstract Methods
+    # Abstract Methods/Properties
     ##############################
 
     @abc.abstractmethod
@@ -114,6 +114,8 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def on_open(self, *args):
         return
+
+
 
     ##############################
     # Decorators
@@ -186,12 +188,15 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
 
         super(AbstractWebSocketConsumer, self).__init__()
-        # Abstract State Machine for connection state
 
-        self._state_machine = WebSocketHelpers.recursive_dict()
+        # Abstract State Machine for connection state
+        self._state_machine_reset()
 
         # Inter-Thread Communication
         self._queue = Queue()
+
+    def _state_machine_reset(self):
+        self._state_machine = WebSocketHelpers.recursive_dict()
 
     ##############################
     # Properties
@@ -215,9 +220,37 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def initialize_connection(self):
         return
 
+    @property
+    @abc.abstractmethod
+    def ws(self):  # set a protocol specific websocket (property)
+        pass
+
+
+    ##############################
+    # Consumer Decorators
+    ##############################
+    def _connect_wrapper(func):
+        """Generic Wrapper"""
+
+        def inner(self, *args, **kwargs):
+            self._state_machine_reset()
+            return func(self, *args, **kwargs)
+
+        return inner
+
+    def _disconnect_wrapper(func):
+        """Generic Wrapper"""
+
+        def inner(self, *args, **kwargs):
+            self._state_machine_reset()
+            return func(self, *args, **kwargs)
+
+        return inner
+
     ##############################
     # Consumer Methods
     ##############################
+
     def pop_and_handle(self, handle_func, block=False, timeout=None, **kwargs):
 
         try:
@@ -226,6 +259,22 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
         except queue.Empty as e:  # Move on
 
             logger.debug('No messages in producer-consumer queue, ' + str(e))
+
+
+
+    @_connect_wrapper
+    def connect(self):
+        self.ws.start() #Start Thread
+        while not self.ws.connected:
+            # Wait for WebSocket Thread to establish connection
+            logger.info('Establishing Connection to ' + str(self.ws.uri))
+            time.sleep(1)
+
+    @_disconnect_wrapper
+    def _disconnect(self):
+        self.ws.close()
+        if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
+            self.ws.join()
 
 class WebSocketHelpers:
 
@@ -241,3 +290,7 @@ class WebSocketHelpers:
     def recursive_dict():
         rec_dict = lambda: collections.defaultdict(rec_dict)  # recursive dictionary, lambda factory
         return rec_dict()
+
+    @staticmethod
+    def filter_dict(d):
+        return dict((k, v) for k, v in d.items() if v)

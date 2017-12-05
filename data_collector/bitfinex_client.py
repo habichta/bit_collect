@@ -28,9 +28,12 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
     def run(self):
         self.connect()
 
-        # self.subscribe_to_ticker(pair='BTCUSD')
-        self.subscribe_to_trades(pair='BTCUSD')
-        self.subscribe_to_trades(pair='LTCUSD')
+        # self.subscribe_to_ticker(pair='tBTCUSD')
+        self.subscribe_to_trades(symbol='tBTCUSD')
+        i = self.subscribe_to_book( symbol='tBTCUSD',prec='R0')
+
+        print(i)
+        #self.subscribe_to_trades(pair='LTCUSD')
 
         while True:
             self.pop_and_handle(handle_func=self._payload_handler)
@@ -41,6 +44,6 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
 if __name__ == "__main__":
     logger.info("Starting BitFinex Collector Instance")
-    bc = BitfinexClient(uri="wss://api.bitfinex.com/ws", info='WebSocket')
+    bc = BitfinexClient(uri="wss://api.bitfinex.com/ws/2", info='WebSocket')
     bc.start()
     bc.join()
