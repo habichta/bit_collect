@@ -39,7 +39,7 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
             self.pop_and_handle(handle_func=self._payload_handler)
             time.sleep(0.5)
 
-        self.disconnect()
+        #self.disconnect()
 
 
 if __name__ == "__main__":

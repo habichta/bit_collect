@@ -30,9 +30,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         # Inter-Thread Communication, Producer-consumer queue
         self.pc_queue = kwargs['pc_queue']
 
-        # Shutdown signal
-        self._sentinel = object()
-
     def __repr__(self):
 
         _s = super().__repr__() + ', WebSocket for ' + str(self._uri)
@@ -61,9 +58,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     def ws(self):
         return self._ws
 
-    @property
-    def sentinel(self):
-        return self._sentinel
 
     ##############################
     # Static Methods
@@ -183,6 +177,11 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         except websocket.WebSocketException as e:
             logger.error('send() failed for' + kwargs + ', trace:' + str(e))
 
+    class Sentinel:
+        def __init__(self,*args,**kwargs):
+            self.kwargs = kwargs
+            self.args = args
+
 
 class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
@@ -190,12 +189,12 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
         super(AbstractWebSocketConsumer, self).__init__()
 
         # Abstract State Machine for connection state
-        self._state_machine_reset()
+        self._state_reset()
 
         # Inter-Thread Communication
         self._queue = Queue()
 
-    def _state_machine_reset(self):
+    def _state_reset(self):
         self._state_machine = WebSocketHelpers.recursive_dict()
 
     ##############################
@@ -231,21 +230,21 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     ##############################
     def _connect_wrapper(func):
         """Generic Wrapper"""
-
         def inner(self, *args, **kwargs):
-            self._state_machine_reset()
+            self._state_reset()
             return func(self, *args, **kwargs)
 
         return inner
 
     def _disconnect_wrapper(func):
         """Generic Wrapper"""
-
         def inner(self, *args, **kwargs):
-            self._state_machine_reset()
+            self._state_reset()
             return func(self, *args, **kwargs)
 
         return inner
+
+
 
     ##############################
     # Consumer Methods

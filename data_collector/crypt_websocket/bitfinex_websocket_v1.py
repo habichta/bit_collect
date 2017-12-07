@@ -56,8 +56,8 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
 
     @AbstractWebSocketProducer._on_close
     def on_close(self, *args):
-        # TODO Sentinel?
-        print('Closed')
+        self.pc_queue.put((time.time(),AbstractWebSocketProducer.Sentinel()))
+
 
     @AbstractWebSocketProducer._on_open
     def on_open(self, *args):
@@ -65,7 +65,7 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
         pass
 
     def on_error(self, *args):
-        # TODO Sentinel?
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel()))
         logger.error('Arguments: ' + str(args))
 
 
@@ -150,7 +150,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
 
     def subscribe_to_book(self, symbol,prec=None,freq=None,length=None):
-
         prec = self.book_ch_def['prec'] if prec is None else prec
         freq = self.book_ch_def['freq'] if freq is None else freq
         length = self.book_ch_def['length'] if length is None else length
@@ -177,12 +176,18 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
         logger.debug(payload)
 
-        self.state_machine['hb'] = payload[0] #Update global Heartbeat with timestamp
+        if isinstance(payload[1],AbstractWebSocketProducer.Sentinel):
+            pass
+            #TODO
 
-        if isinstance(payload[1], dict):  # events are dictionaries
-            self.pl_type_switch['event'](payload=payload, **kwargs)
-        else:  # data is a list
-            self.pl_type_switch['data'](payload=payload, **kwargs)
+        else:
+
+            self.state_machine['hb'] = payload[0] #Update global Heartbeat with timestamp
+
+            if isinstance(payload[1], dict):  # events are dictionaries
+                self.pl_type_switch['event'](payload=payload, **kwargs)
+            else:  # data is a list
+                self.pl_type_switch['data'](payload=payload, **kwargs)
 
     def _handle_event(self, payload, **kwargs):
 
