@@ -1,10 +1,12 @@
 import json
-from .abstract_websocket import AbstractWebSocketProducer, AbstractWebSocketConsumer,WebSocketHelpers
+from .abstract_websocket import AbstractWebSocketProducer, AbstractWebSocketConsumer, WebSocketHelpers
 from logging.config import fileConfig
 import logging
 import hmac
 import hashlib
 import time
+from threading import Event
+from queue import Queue
 
 from pprint import pprint
 
@@ -31,33 +33,34 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
 
         return payload
 
-    def bitfinex_subscribe(self,  **r_args):
-        #TODO: Symbol can be without t or f prefix. This creates issue with unsubscribing since subscribed event always
-        #returns with a t or f prefix but identifier will not have such a prefix.
-
+    def bitfinex_subscribe(self, **r_args):
         request = {'event': 'subscribe'}
         request.update(r_args)
-        identifier = tuple(r_args.values()) #For unsubscribing
+        identifier = tuple(r_args.values())  # For unsubscribing
         self.send(self.bitfinex_send_protocol, **request)
 
         return identifier
 
-    #Conf
-    #Unsubscribe
-    #Pong
+    def bitfinex_unsubscribe(self, **r_args):
+        request = {'event': 'unsubscribe'}
+        request.update(r_args)
+        print(request)
+        self.send(self.bitfinex_send_protocol, **request)
+
+
+
+
 
     #########################
     # Producer Callbacks
     #########################
 
     def on_message(self, *args):
-        print(*args)
         msg_dict, receive_ts = json.loads(args[1]), time.time()
         self.pc_queue.put((receive_ts, msg_dict))
 
-
     def on_close(self, *args):
-        self.pc_queue.put((time.time(),AbstractWebSocketProducer.Sentinel()))
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel()))
 
     def on_open(self, *args):
         # TODO Authentication methods
@@ -83,40 +86,36 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                                 'subscribed': self._handle_subscribed_event,
                                 'unsubscribed': self._handle_unsubscribed_event,
                                 'pong': self._handle_pong_event}
-        self.info_codes = {'20051':'EVT_STOP', '20060':'EVT_RESYNC_START', '20061':'EVT_RESYNC_STOP'}
+        self.info_codes = {'20051': 'EVT_STOP', '20060': 'EVT_RESYNC_START', '20061': 'EVT_RESYNC_STOP'}
         # Stop / Restart Websocket Server(please try to reconnect),
         # Refreshing data from the Trading Engine. Pause any activity (wait for 20061),
         # Done Refreshing data from the Trading Engine. Resume normal activity. Advised to
         # unsubscribe / subscribe again all channels.
         self.error_codes = {10000: 'ERR_UNK',
-                             10001: 'ERR_GENERIC',
-                             10008: 'ERR_CONCURRENCY',
-                             10020: 'ERR_PARAMS',
-                             10050: 'ERR_CONF_FAIL',
-                             10100: 'ERR_AUTH_FAIL',
-                             10111: 'ERR_AUTH_PAYLOAD',
-                             10112: 'ERR_AUTH_SIG',
-                             10113: 'ERR_AUTH_HMAC',
-                             10114: 'ERR_AUTH_NONCE',
-                             10200: 'ERR_UNAUTH_FAIL',
-                             10300: 'ERR_SUB_FAIL',
-                             10301: 'ERR_SUB_MULTI',
-                             10400: 'ERR_UNSUB_FAIL',
-                             11000: 'ERR_READY',
-                             }
+                            10001: 'ERR_GENERIC',
+                            10008: 'ERR_CONCURRENCY',
+                            10020: 'ERR_PARAMS',
+                            10050: 'ERR_CONF_FAIL',
+                            10100: 'ERR_AUTH_FAIL',
+                            10111: 'ERR_AUTH_PAYLOAD',
+                            10112: 'ERR_AUTH_SIG',
+                            10113: 'ERR_AUTH_HMAC',
+                            10114: 'ERR_AUTH_NONCE',
+                            10200: 'ERR_UNAUTH_FAIL',
+                            10300: 'ERR_SUB_FAIL',
+                            10301: 'ERR_SUB_MULTI',
+                            10400: 'ERR_UNSUB_FAIL',
+                            11000: 'ERR_READY',
+                            }
 
         self.book_ch_def = {'prec': 'P0',
-                              'freq': 'F0',
-                              'length': 25}
+                            'freq': 'F0',
+                            'length': '25'}
 
-
-
-        self.ev_all_subscribed_fields = ['events','channel','chanId','pair']
-        self.ev_add_orderbook_subscribed_fields = ['prec','freq','len']
-        self.ev_add_raworderbook_subscribed_fields = ['prec','len']
-        self.identifier_elements = ['channel','pair','prec', 'freq','len']
-
-
+        self.ev_all_subscribed_fields = ['events', 'channel', 'chanId', 'pair']
+        self.ev_add_orderbook_subscribed_fields = ['prec', 'freq', 'len']
+        self.ev_add_raworderbook_subscribed_fields = ['prec', 'len']
+        self.identifier_elements = ['channel', 'symbol', 'prec', 'freq', 'len']
 
     ########################################################
     # Consumer Properties
@@ -130,7 +129,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ########################################################
 
     def handle_exceptions(self):
-        #TODO Check if any info codes or errors arrived that need certain actions. i.e. reconnect
+        # TODO Check if any info codes or errors arrived that need certain actions. i.e. reconnect
         pass
 
     ##################################
@@ -141,18 +140,33 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ##################################
 
     def subscribe_to_trades(self, symbol):
-        return self.ws.bitfinex_subscribe(channel='trades', symbol=symbol)
 
+        return self.ws.bitfinex_subscribe(channel='trades', symbol=symbol) if symbol.startswith(
+            ('t', 'f')) else logger.error('Symbol needs "t","f" prefix: ' + symbol)
 
     def subscribe_to_ticker(self, symbol):
-        return self.ws.bitfinex_subscribe(channel='ticker', symbol=symbol)
 
+        return self.ws.bitfinex_subscribe(channel='ticker', symbol=symbol) if symbol.startswith(
+            ('t', 'f')) else logger.error('Symbol needs "t","f" prefix: ' + symbol)
 
-    def subscribe_to_book(self, symbol,prec=None,freq=None,length=None):
-        prec = self.book_ch_def['prec'] if prec is None else prec
-        freq = self.book_ch_def['freq'] if freq is None else freq
-        length = self.book_ch_def['length'] if length is None else length
-        return self.ws.bitfinex_subscribe(channel='book', symbol=symbol, prec=prec,freq=freq,length=length)
+    def subscribe_to_book(self, symbol, prec=None, freq=None, length=None):
+
+        prec = self.book_ch_def['prec'] if prec is None else str(prec)
+        freq = self.book_ch_def['freq'] if freq is None else str(freq)
+        length = self.book_ch_def['length'] if length is None else str(length)
+
+        return self.ws.bitfinex_subscribe(channel='book', symbol=symbol, prec=prec, freq=freq,
+                                          length=length) if symbol.startswith(('t', 'f')) else logger.error(
+            'Symbol needs "t","f" prefix:' + symbol)
+
+    @is_subscribed
+    def unsubscribe(self, identifier):
+
+        if self.is_subscribed(identifier):
+            self.state_machine[identifier]['_subscribed'].clear()
+            channel_id = self.state_machine[identifier]['_chanId']
+            self.ws.bitfinex_unsubscribe(chanId = int(channel_id))
+
 
 
 
@@ -160,9 +174,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ########################################################
     # Internal Functions
     ########################################################
-
-
-
 
 
 
@@ -175,13 +186,13 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
         logger.debug(payload)
 
-        if isinstance(payload[1],AbstractWebSocketProducer.Sentinel):
+        if isinstance(payload[1], AbstractWebSocketProducer.Sentinel):
             pass
-            #TODO
+            # TODO
 
         else:
 
-            self.state_machine['hb'] = payload[0] #Update global Heartbeat with timestamp
+            self.state_machine['hb'] = payload[0]  # Update global Heartbeat with timestamp
 
             if isinstance(payload[1], dict):  # events are dictionaries
                 self.pl_type_switch['event'](payload=payload, **kwargs)
@@ -198,7 +209,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         except Exception as e:
             logger.error(str(e) + ', got: ' + str(event_type))
 
-
     def _handle_data(self, **kwargs):
         pass
 
@@ -211,8 +221,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def _handle_info_event(self, payload, **kwargs):
 
-        msg = payload[1] #Json message
-        ts = payload[0] #Receive time stamp
+        msg = payload[1]  # Json message
+        ts = payload[0]  # Receive time stamp
 
         if 'version' in msg:
             self.state_machine['version']['_v'] = msg['version']
@@ -222,52 +232,71 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             info_code = str(msg['code'])
             if info_code in self.info_codes:
                 try:
-                    info_message =  str(msg['msg'])
+                    info_message = str(msg['msg'])
                 except KeyError:
                     info_message = None
 
                 self.state_machine['info'][info_code]['_ts'] = ts
                 self.state_machine['info'][info_code]['_msg'] = info_message
 
-                logger.info(str(ts)+ ': ' + info_code+ ': ' + info_message)
+                logger.info(str(ts) + ': ' + info_code + ': ' + info_message)
             else:
-                logger.error(str(ts)+': Unknown info code: ', str(info_code))
+                logger.error(str(ts) + ': Unknown info code: ', str(info_code))
         else:
-            logger.error(str(ts)+': Unknown info message: ' + str(msg))
+            logger.error(str(ts) + ': Unknown info message: ' + str(msg))
 
     def _handle_error_event(self, payload, **kwargs):
         print(payload)
 
     def _handle_subscribed_event(self, payload, **kwargs):
 
-        ts,msg = payload[0],payload[1]  # Json message
-        chanId = str(msg['chanId'])
-        channel, pair = str(msg['channel']),str(msg['pair'])
+        ts, msg = payload[0], payload[1]  # Json message
+        chanId = msg['chanId']
 
-        for k,v in msg.items():
-            self.state_machine[chanId]['_'+str(k)] = v  # Channel ID
+        for k, v in msg.items():
+            self.state_machine[chanId]['_' + str(k)] = v  # Channel ID
         self.state_machine[chanId]['_ts'] = ts  # Subscrition Time stamp
         self.state_machine[chanId]['_hb'] = ts  # Time stamp last message (Channel Heartbeat)
 
-        #Mapping (channel,pair) to
+        # Create identifier that maps to channel id (for unsubscription)
 
-        self.state_machine[(channel,pair)] = chanId
+        identifier = []
+        for e in self.identifier_elements:
+            if e in msg.keys():
+                identifier += [msg[e]]
+        ident_t = tuple(identifier)
+        self.state_machine[ident_t]['_chanId'] = chanId
+        self.state_machine[chanId]['_identifier'] = ident_t
 
+        #Data Queue
+        data_queue = Queue()
+        self.state_machine[chanId]['_dataQueue'] = data_queue
+        self.state_machine[ident_t]['_dataQueue'] = data_queue
 
+        ready_event = Event()
+        ready_event.set()
+        self.state_machine[ident_t]['_subscribed'] = ready_event
 
 
     def _handle_unsubscribed_event(self, payload, **kwargs):
-        pass
+        ts, msg = payload[0], payload[1]  # Json message
+        chanId = msg['chanId']
+        identifier = self.state_machine[chanId]['_identifier']
+
+
+        pprint(self.state_machine)
+        del(self.state_machine[chanId])
+        del(self.state_machine[identifier])
+        pprint(self.state_machine)
+
 
 
 
     def _handle_pong_event(self, payload, **kwargs):
         print(payload)
 
-
     def _check_protocol_sanity(self):
         pass
-
 
     ##################################
     # Bitfinex Data
@@ -279,7 +308,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     # Authentication/Security
     ##################################
 
-    def _create_authentication_payload(self,api_secret,api_key):
+    def _create_authentication_payload(self, api_secret, api_key):
 
         nonce = int(time.time() * 1000000)
         auth_payload = 'AUTH{}'.format(nonce)

@@ -74,6 +74,17 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
 
         return inner
 
+    @staticmethod #TODO
+    def _is_connected(func):
+        def inner(self, *args, **kwargs):
+            if self.ws and self.connected:
+                return func(self, *args, **kwargs)
+            else:
+                logger.error('Web Socket not connected')
+                return None
+
+        return inner
+
     ###################################
     # Parent Callbacks/Abstract Methods
     ###################################
@@ -260,6 +271,7 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
 
 
+
     @_connect_wrapper
     def connect(self):
         self.ws.start() #Start Thread
@@ -269,7 +281,7 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
             time.sleep(1)
 
     @_disconnect_wrapper
-    def _disconnect(self):
+    def disconnect(self):
         self.ws.close()
         if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
             self.ws.join()
