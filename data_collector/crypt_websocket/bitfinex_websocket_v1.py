@@ -51,15 +51,14 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
     #########################
 
     def on_message(self, *args):
+        print(*args)
         msg_dict, receive_ts = json.loads(args[1]), time.time()
         self.pc_queue.put((receive_ts, msg_dict))
 
-    @AbstractWebSocketProducer._on_close
+
     def on_close(self, *args):
         self.pc_queue.put((time.time(),AbstractWebSocketProducer.Sentinel()))
 
-
-    @AbstractWebSocketProducer._on_open
     def on_open(self, *args):
         # TODO Authentication methods
         pass

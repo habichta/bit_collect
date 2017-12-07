@@ -62,21 +62,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     ##############################
     # Static Methods
     ##############################
-    @staticmethod
-    def _on_open(func):
-        def inner(self, *args):
-            self._connected.set()
-            return func(self, *args)
-
-        return inner
-
-    @staticmethod
-    def _on_close(func):
-        def inner(self, *args):
-            self._connected.clear()
-            return func(self, *args)
-
-        return inner
 
     @staticmethod
     def _is_connected(func):
@@ -89,9 +74,9 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
 
         return inner
 
-    ##############################
-    # Abstract Methods/Properties
-    ##############################
+    ###################################
+    # Parent Callbacks/Abstract Methods
+    ###################################
 
     @abc.abstractmethod
     def on_message(self, *args):
@@ -108,6 +93,20 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def on_open(self, *args):
         return
+
+    def on_message_cb(self,*args):
+        self.on_message(*args)
+
+    def on_error_cb(self,*args):
+        self.on_error(*args)
+
+    def on_close_cb(self,*args):
+        self._connected.clear()
+        self.on_close(*args)
+
+    def on_open_cb(self,*args):
+        self._connected.set()
+        self.on_open(*args)
 
 
 
@@ -153,9 +152,9 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     @_connect_wrapper
     def connect(self):
         try:
-            self._ws = websocket.WebSocketApp(self._uri, on_message=self.on_message, on_open=self.on_open,
-                                              on_error=self.on_error,
-                                              on_close=self.on_close)
+            self._ws = websocket.WebSocketApp(self._uri, on_message=self.on_message_cb, on_open=self.on_open_cb,
+                                              on_error=self.on_error_cb,
+                                              on_close=self.on_close_cb)
             self._ws.run_forever()
         except websocket.WebSocketException as e:
             logger.error('connect() failed, trace:' + str(e))
