@@ -30,9 +30,9 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
         # self.subscribe_to_ticker(pair='tBTCUSD')
         #identifier2 = self.subscribe_to_trades(symbol='tBTCUSD')
-        identifier1 = self.subscribe_to_book( symbol='tBTCUSD',prec='R0')
+        identifier1 = self.subscribe_to_book( symbol='tBTCUSD')
 
-        print(identifier1)
+
         #self.subscribe_to_trades(pair='LTCUSD')
 
         i = True
@@ -40,8 +40,9 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
             self.pop_and_handle(handle_func=self._payload_handler)
             time.sleep(0.3)
 
-
+            #self.unsubscribe(identifier2)
             self.unsubscribe(identifier1)
+
 
 
 

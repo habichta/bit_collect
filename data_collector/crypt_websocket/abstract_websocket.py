@@ -74,16 +74,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
 
         return inner
 
-    @staticmethod #TODO
-    def _is_connected(func):
-        def inner(self, *args, **kwargs):
-            if self.ws and self.connected:
-                return func(self, *args, **kwargs)
-            else:
-                logger.error('Web Socket not connected')
-                return None
 
-        return inner
 
     ###################################
     # Parent Callbacks/Abstract Methods
@@ -217,6 +208,23 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     @property
     def pc_queue(self):  # Producer-consumer queue
         return self._queue
+
+    ##############################
+    # Static Methods
+    ##############################
+
+    @staticmethod
+    def _is_subscribed(func):
+        def inner(self, identifier,*args, **kwargs):
+            print(self.state_machine)
+            if self.state_machine[identifier]['_subscribed'] != {} and self.state_machine[identifier]['_subscribed'].is_set():
+                return func(self, identifier,*args, **kwargs)
+            else:
+                print('TEST')
+                #del(self.state_machine[identifier]) #Accessing fields creates intermediate dictionaries, delete them again
+                return None
+
+        return inner
 
     ##############################
     # Abstract Methods

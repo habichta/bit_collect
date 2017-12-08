@@ -159,13 +159,11 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                                           length=length) if symbol.startswith(('t', 'f')) else logger.error(
             'Symbol needs "t","f" prefix:' + symbol)
 
-    @is_subscribed
+    @AbstractWebSocketConsumer._is_subscribed
     def unsubscribe(self, identifier):
-
-        if self.is_subscribed(identifier):
-            self.state_machine[identifier]['_subscribed'].clear()
-            channel_id = self.state_machine[identifier]['_chanId']
-            self.ws.bitfinex_unsubscribe(chanId = int(channel_id))
+        self.state_machine[identifier]['_subscribed'].clear()
+        channel_id = self.state_machine[identifier]['_chanId']
+        self.ws.bitfinex_unsubscribe(chanId = int(channel_id))
 
 
 
@@ -278,6 +276,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.state_machine[ident_t]['_subscribed'] = ready_event
 
 
+
+
     def _handle_unsubscribed_event(self, payload, **kwargs):
         ts, msg = payload[0], payload[1]  # Json message
         chanId = msg['chanId']
@@ -287,7 +287,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         pprint(self.state_machine)
         del(self.state_machine[chanId])
         del(self.state_machine[identifier])
-        pprint(self.state_machine)
+        #pprint(self.state_machine)
 
 
 
