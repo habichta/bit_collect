@@ -11,6 +11,15 @@ import collections
 from queue import Queue
 import queue
 
+
+#TODO
+#Unsub when  disconnect
+#Handle Sentinels
+#Handle error codes
+#Handle pause,unpause,reconnect info
+#config
+#Pong event
+
 # TODO move to __init__.py
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
@@ -24,11 +33,21 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         self._uri = kwargs['uri']
         self._info = kwargs['info']
 
+
         # Keep State of WS
         self._connected = Event()
+        self._reconnect_scheduled = Event()
 
         # Inter-Thread Communication, Producer-consumer queue
         self.pc_queue = kwargs['pc_queue']
+
+
+        ##############################
+        # WebSocket Protocol
+        ##############################
+
+        self.codes={'WS_CONN_CLOSED':0x00000001,'WS_CONN_ERROR':0x00000002,'WS_CONN_OPEN':0x00000004}
+
 
     def __repr__(self):
 
@@ -53,6 +72,18 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     @property
     def connected(self):
         return self._connected.is_set()
+
+    @property
+    def reconnect_scheduled(self):
+        return self._reconnect_scheduled.is_set()
+
+    @reconnect_scheduled.setter
+    def reconnect_scheduled(self,value):
+        if value:
+            self._reconnect_scheduled.set()
+        else:
+            self._reconnect_scheduled.clear()
+
 
     @property
     def ws(self):
@@ -97,14 +128,18 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         self.on_message(*args)
 
     def on_error_cb(self, *args):
+        self._connected.clear()
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_ERROR'])))
         self.on_error(*args)
 
     def on_close_cb(self, *args):
         self._connected.clear()
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_CLOSED'])))
         self.on_close(*args)
 
     def on_open_cb(self, *args):
         self._connected.set()
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_OPEN'])))
         self.on_open(*args)
 
     ##############################
@@ -147,14 +182,32 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     ##############################
 
     @_connect_wrapper
-    def connect(self):
-        try:
-            self._ws = websocket.WebSocketApp(self._uri, on_message=self.on_message_cb, on_open=self.on_open_cb,
-                                              on_error=self.on_error_cb,
-                                              on_close=self.on_close_cb)
-            self._ws.run_forever()
-        except websocket.WebSocketException as e:
-            logger.error('connect() failed, trace:' + str(e))
+    def connect(self,reconnect=True,time_interval=10):
+
+        self._reconnect_scheduled.set() #Can be changed by other Thread (thread-safe)
+
+        while self._reconnect_scheduled.is_set():
+            try:
+
+                self._ws = websocket.WebSocketApp(self._uri, on_message=self.on_message_cb, on_open=self.on_open_cb,
+                                                  on_error=self.on_error_cb,
+                                                  on_close=self.on_close_cb)
+
+                self._ws.run_forever() #Stopped when connection closed or error
+
+
+            except websocket.WebSocketException as e:
+                logger.error('connect() failed, trace:' + str(e))
+
+            finally:
+                logger.info('Connection to {} stop'.format(self.uri))
+                if self._reconnect_scheduled.is_set() and reconnect:
+                    logger.info('Reconnect to {} scheduled...'.format(self.uri))
+                    time.sleep(time_interval)
+                    logger.info('Reconnect to {}'.format(self.uri))
+
+
+
 
     @_is_connected.__func__
     @_close_wrapper
@@ -171,10 +224,10 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         try:
             self._ws.send(payload)
         except websocket.WebSocketException as e:
-            logger.error('send() failed for' + kwargs + ', trace:' + str(e))
+            logger.error('send() failed for' + str(kwargs) + ', trace:' + str(e))
 
     class Sentinel:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, code, *args, **kwargs):
             self.kwargs = kwargs
             self.args = args
 
@@ -254,6 +307,7 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
         def inner(self, *args, **kwargs):
             self._state_reset()
+            self.ws.reconnect_scheduled = True
             return func(self, *args, **kwargs)
 
         return inner
@@ -282,8 +336,8 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     @_disconnect_wrapper
     def disconnect(self):
         self.ws.close()
-        if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
-            self.ws.join()
+        #if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
+         #   self.ws.join()
 
 
 class WebSocketHelpers:

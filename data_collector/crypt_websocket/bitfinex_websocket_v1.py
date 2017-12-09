@@ -47,6 +47,8 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
         request.update(r_args)
         self.send(self.bitfinex_send_protocol, **request)
 
+
+
     #########################
     # Producer Callbacks
     #########################
@@ -56,14 +58,13 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
         self.pc_queue.put((receive_ts, msg_dict))
 
     def on_close(self, *args):
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel()))
+        pass
 
     def on_open(self, *args):
         # TODO Authentication methods
         pass
 
     def on_error(self, *args):
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel()))
         logger.error('Arguments: ' + str(args))
 
 
@@ -179,6 +180,12 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ########################################################
     # Internal Functions
     ########################################################
+
+
+
+
+
+
     ##################################
     # Handle Producer-Consumer Queue
     ##################################
