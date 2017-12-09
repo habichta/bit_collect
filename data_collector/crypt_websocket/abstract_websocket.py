@@ -58,7 +58,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     def ws(self):
         return self._ws
 
-
     ##############################
     # Static Methods
     ##############################
@@ -73,8 +72,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
                 return None
 
         return inner
-
-
 
     ###################################
     # Parent Callbacks/Abstract Methods
@@ -96,21 +93,19 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     def on_open(self, *args):
         return
 
-    def on_message_cb(self,*args):
+    def on_message_cb(self, *args):
         self.on_message(*args)
 
-    def on_error_cb(self,*args):
+    def on_error_cb(self, *args):
         self.on_error(*args)
 
-    def on_close_cb(self,*args):
+    def on_close_cb(self, *args):
         self._connected.clear()
         self.on_close(*args)
 
-    def on_open_cb(self,*args):
+    def on_open_cb(self, *args):
         self._connected.set()
         self.on_open(*args)
-
-
 
     ##############################
     # Decorators
@@ -179,7 +174,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
             logger.error('send() failed for' + kwargs + ', trace:' + str(e))
 
     class Sentinel:
-        def __init__(self,*args,**kwargs):
+        def __init__(self, *args, **kwargs):
             self.kwargs = kwargs
             self.args = args
 
@@ -196,7 +191,7 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
         self._queue = Queue()
 
     def _state_reset(self):
-        self._state_machine = WebSocketHelpers.recursive_dict()
+        self._state_machine = dict()
 
     ##############################
     # Properties
@@ -215,13 +210,13 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
     @staticmethod
     def _is_subscribed(func):
-        def inner(self, identifier,*args, **kwargs):
-            print(self.state_machine)
-            if self.state_machine[identifier]['_subscribed'] != {} and self.state_machine[identifier]['_subscribed'].is_set():
-                return func(self, identifier,*args, **kwargs)
-            else:
-                print('TEST')
-                #del(self.state_machine[identifier]) #Accessing fields creates intermediate dictionaries, delete them again
+        def inner(self, identifier, *args, **kwargs):
+            try:
+                if self.state_machine[identifier]['_subscribed'].is_set():
+                    return func(self, identifier, *args, **kwargs)
+                else:
+                    return None
+            except KeyError:
                 return None
 
         return inner
@@ -242,12 +237,12 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def ws(self):  # set a protocol specific websocket (property)
         pass
 
-
     ##############################
     # Consumer Decorators
     ##############################
     def _connect_wrapper(func):
         """Generic Wrapper"""
+
         def inner(self, *args, **kwargs):
             self._state_reset()
             return func(self, *args, **kwargs)
@@ -256,13 +251,12 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
     def _disconnect_wrapper(func):
         """Generic Wrapper"""
+
         def inner(self, *args, **kwargs):
             self._state_reset()
             return func(self, *args, **kwargs)
 
         return inner
-
-
 
     ##############################
     # Consumer Methods
@@ -277,12 +271,9 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
             logger.debug('No messages in producer-consumer queue, ' + str(e))
 
-
-
-
     @_connect_wrapper
     def connect(self):
-        self.ws.start() #Start Thread
+        self.ws.start()  # Start Thread
         while not self.ws.connected:
             # Wait for WebSocket Thread to establish connection
             logger.info('Establishing Connection to ' + str(self.ws.uri))
@@ -294,10 +285,10 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
         if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
             self.ws.join()
 
-class WebSocketHelpers:
 
+class WebSocketHelpers:
     @staticmethod
-    def any_in(a,b):
+    def any_in(a, b):
         return any(i in b for i in a)
 
     @staticmethod
@@ -312,3 +303,21 @@ class WebSocketHelpers:
     @staticmethod
     def filter_dict(d):
         return dict((k, v) for k, v in d.items() if v)
+
+    @staticmethod
+    def r_add(d, l):
+        if len(l) == 2:
+            d[l[0]] = l[1]
+        else:
+            key = l.pop(0)
+            try:
+                WebSocketHelpers.r_add(d[key], l)
+            except KeyError:
+                d[key] = {}
+                WebSocketHelpers.r_add(d[key], l)
+
+
+class ProtocolException(Exception):
+    def __init__(self, msg, *args, **kwargs):
+        logger.error(msg)
+        Exception.__init__(self, *args, **kwargs)
