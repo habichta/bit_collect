@@ -188,8 +188,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         logger.debug(payload)
 
         if isinstance(payload[1], AbstractWebSocketProducer.Sentinel):
-            pass
-            # TODO
+
+            _sentinel = payload[1]
+            #TODO
 
         else:
 
@@ -231,7 +232,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
 
         elif 'code' in msg:
-            info_code = str(msg['code'])
+            info_code = msg['code']
             if info_code in self.info_codes:
                 try:
                     info_message = str(msg['msg'])
@@ -240,11 +241,14 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
                 WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_ts', ts])
                 WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_msg', info_message])
-
-
+                logger.info(str(ts) + ': ' + str(info_code) + ': ' + info_message)
 
 
                 logger.info(str(ts) + ': ' + info_code + ': ' + info_message)
+
+                self.pl_info_switch[info_code]()
+
+
             else:
                 logger.error(str(ts) + ': Unknown info code: ', str(info_code))
         else:
@@ -295,18 +299,22 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         print(payload)
 
 
+
+
     ##################################
     # Bitfinex InfoCode Events
     ##################################
 
     def _evt_stop_handler(self):
-        pass
+        self.reconnect()
+
 
     def _evt_resyc_start_handler(self):
-        pass
+        self.pause()
 
     def _evt_resync_stop_handler(self):
-        pass
+        self.reconnect()
+        self.unpause()
 
 
     ##################################

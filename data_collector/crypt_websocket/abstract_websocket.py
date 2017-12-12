@@ -36,7 +36,10 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
 
         # Keep State of WS
         self._connected = Event()
+
+        self._paused = Event()
         self._reconnect_scheduled = Event()
+
 
         # Inter-Thread Communication, Producer-consumer queue
         self.pc_queue = kwargs['pc_queue']
@@ -74,6 +77,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         return self._connected.is_set()
 
     @property
+
     def reconnect_scheduled(self):
         return self._reconnect_scheduled.is_set()
 
@@ -85,7 +89,19 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
             self._reconnect_scheduled.clear()
 
 
+
     @property
+    def paused(self):
+        return self.paused.is_set()
+
+    @paused.setter
+    def paused(self, value):
+        if value:
+            self._paused.set()
+        else:
+            self._paused.clear()
+
+
     def ws(self):
         return self._ws
 
@@ -100,6 +116,16 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
                 return func(self, *args, **kwargs)
             else:
                 logger.error('Web Socket not connected')
+                return None
+
+        return inner
+
+    @staticmethod
+    def _is_not_paused(func):
+        def inner(self, *args, **kwargs):
+            if self.ws and not self.paused:
+                return func(self, *args, **kwargs)
+            else:
                 return None
 
         return inner
@@ -141,6 +167,10 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         self._connected.set()
         self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_OPEN'])))
         self.on_open(*args)
+
+    @abc.abstractmethod
+    def unsubscribe_all(self, *args):
+        return
 
     ##############################
     # Decorators
@@ -217,6 +247,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         except websocket.WebSocketException as e:
             logger.error('close() failed, trace:' + str(e))
 
+    @_is_not_paused.__func__
     @_is_connected.__func__
     @_send_wrapper
     def send(self, protocol_func, **kwargs):
@@ -242,6 +273,8 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
         # Inter-Thread Communication
         self._queue = Queue()
+
+
 
     def _state_reset(self):
         self._state_machine = dict()
@@ -307,6 +340,16 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
         def inner(self, *args, **kwargs):
             self._state_reset()
+
+            self.ws.reconnect_scheduled = False
+            return func(self, *args, **kwargs)
+
+        return inner
+
+    def _reconnect_wrapper(func):
+        """Generic Wrapper"""
+        def inner(self, *args, **kwargs):
+            self._state_reset()
             self.ws.reconnect_scheduled = True
             return func(self, *args, **kwargs)
 
@@ -336,8 +379,21 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     @_disconnect_wrapper
     def disconnect(self):
         self.ws.close()
-        #if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
-         #   self.ws.join()
+
+        if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
+           self.ws.join()
+
+    @_reconnect_wrapper
+    #reconnect calls on_open. Initialize all channels
+    def reconnect(self):
+        self.ws.close()
+
+    def pause(self):
+        self.ws.paused=True
+        logger.info('Paused: ' + str(self.ws.uri))
+    def unpause(self):
+        self.ws.paused = False
+        logger.info('Unpaused: ' + str(self.ws.uri))
 
 
 class WebSocketHelpers:
