@@ -172,6 +172,13 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         channel_id = self.state_machine[identifier]['_chanId']
         self.ws.bitfinex_unsubscribe(chanId=int(channel_id))
 
+    def unsubscribe_all(self):
+        for k in self.state_machine.keys():
+            if '_subscribed' in k.keys():
+                self.unsubscribe(k)
+
+
+
     ########################################################
     # Internal Functions
     ########################################################

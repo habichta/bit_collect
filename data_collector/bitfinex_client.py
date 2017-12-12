@@ -43,13 +43,13 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
 
             if i:
-                self.disconnect()
+                #self.disconnect()
                 i = False
 
 
 
 
-            identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
+            #identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
             # self.disconnect()
 
 

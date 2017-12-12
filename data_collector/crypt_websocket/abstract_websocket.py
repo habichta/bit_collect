@@ -13,7 +13,7 @@ import queue
 
 
 #TODO
-#Unsub when  disconnect
+#Pause handling
 #Handle Sentinels
 #Handle error codes
 #Handle pause,unpause,reconnect info
@@ -77,7 +77,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         return self._connected.is_set()
 
     @property
-
     def reconnect_scheduled(self):
         return self._reconnect_scheduled.is_set()
 
@@ -87,8 +86,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
             self._reconnect_scheduled.set()
         else:
             self._reconnect_scheduled.clear()
-
-
 
     @property
     def paused(self):
@@ -168,9 +165,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_OPEN'])))
         self.on_open(*args)
 
-    @abc.abstractmethod
-    def unsubscribe_all(self, *args):
-        return
+
 
     ##############################
     # Decorators
@@ -323,6 +318,10 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def ws(self):  # set a protocol specific websocket (property)
         pass
 
+    @abc.abstractmethod
+    def unsubscribe_all(self, *args):
+        return
+
     ##############################
     # Consumer Decorators
     ##############################
@@ -384,7 +383,6 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
            self.ws.join()
 
     @_reconnect_wrapper
-    #reconnect calls on_open. Initialize all channels
     def reconnect(self):
         self.ws.close()
 
