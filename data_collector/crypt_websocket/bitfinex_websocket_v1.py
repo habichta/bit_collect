@@ -83,6 +83,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                                 'subscribed': self._handle_subscribed_event,
                                 'unsubscribed': self._handle_unsubscribed_event,
                                 'pong': self._handle_pong_event}
+        self.pl_info_switch = {20051:self._evt_stop_handler,20060:self._evt_resyc_start_handler,20061:self._evt_resync_stop_handler}
         self.info_codes = {'20051': 'EVT_STOP', '20060': 'EVT_RESYNC_START', '20061': 'EVT_RESYNC_STOP'}
         # Stop / Restart Websocket Server(please try to reconnect),
         # Refreshing data from the Trading Engine. Pause any activity (wait for 20061),
@@ -123,13 +124,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     def ws(self):
         return self._ws
 
-    ########################################################
-    # Client Interface Functions
-    ########################################################
 
-    def handle_exceptions(self):
-        # TODO Check if any info codes or errors arrived that need certain actions. i.e. reconnect
-        pass
 
     ##################################
     # Open Channels
@@ -180,9 +175,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ########################################################
     # Internal Functions
     ########################################################
-
-
-
 
 
 
@@ -249,6 +241,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                 WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_ts', ts])
                 WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_msg', info_message])
 
+
+
+
                 logger.info(str(ts) + ': ' + info_code + ': ' + info_message)
             else:
                 logger.error(str(ts) + ': Unknown info code: ', str(info_code))
@@ -299,8 +294,20 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     def _handle_pong_event(self, payload, **kwargs):
         print(payload)
 
-    def _check_protocol_sanity(self):
+
+    ##################################
+    # Bitfinex InfoCode Events
+    ##################################
+
+    def _evt_stop_handler(self):
         pass
+
+    def _evt_resyc_start_handler(self):
+        pass
+
+    def _evt_resync_stop_handler(self):
+        pass
+
 
     ##################################
     # Bitfinex Data
