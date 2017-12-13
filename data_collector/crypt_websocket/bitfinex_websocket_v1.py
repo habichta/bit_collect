@@ -8,6 +8,7 @@ import hashlib
 import time
 from threading import Event
 from queue import Queue
+import random
 
 from pprint import pprint
 
@@ -47,25 +48,27 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
         request.update(r_args)
         self.send(self.bitfinex_send_protocol, **request)
 
+    def bitfinex_ping(self, **r_args):
+        cid = random.randint(0,2**10)
+        request = {'event': 'ping','cid':cid}
+        self.send(self.bitfinex_send_protocol, **request)
+        return time.time(), cid
+
 
 
     #########################
-    # Producer Callbacks
+    # Producer Callbacks/Optional additional functionality
     #########################
 
     def on_message(self, *args):
-        msg_dict, receive_ts = json.loads(args[1]), time.time()
-        self.pc_queue.put((receive_ts, msg_dict))
-
+        pass
     def on_close(self, *args):
         pass
-
     def on_open(self, *args):
-        # TODO Authentication methods
+        pass
+    def on_error(self, *args):
         pass
 
-    def on_error(self, *args):
-        logger.error('Arguments: ' + str(args))
 
 
 class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
@@ -177,6 +180,14 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             if '_subscribed' in k.keys():
                 self.unsubscribe(k)
 
+    def ping(self):
+        if 'pong' in self.state_machine.keys():
+            del(self.state_machine['pong'])
+        return self.ws.bitfinex_ping()
+
+    def config(self): #TODO
+        pass
+
 
 
     ########################################################
@@ -262,7 +273,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             logger.error(str(ts) + ': Unknown info message: ' + str(msg))
 
     def _handle_error_event(self, payload, **kwargs):
-        print(payload)
+        ts, msg = payload[0], payload[1]
+        logger.error(str(ts)+': Web Socket returned error: Code:'+ str(msg['code']) +', Message: '+ str(msg['msg']))
+        #TODO Error handling
 
     def _handle_subscribed_event(self, payload, **kwargs):
 
@@ -300,21 +313,21 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         del (self.state_machine[chanId])
         del (self.state_machine[identifier])
 
-        
 
     def _handle_pong_event(self, payload, **kwargs):
-        print(payload)
+        ts, msg = payload[0], payload[1]
+        WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_ts',ts])
+        WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_recv_ts', msg['ts']])
 
 
 
 
-    ##################################
+        ##################################
     # Bitfinex InfoCode Events
     ##################################
 
     def _evt_stop_handler(self):
         self.reconnect()
-
 
     def _evt_resyc_start_handler(self):
         self.pause()

@@ -10,15 +10,13 @@ import threading
 import collections
 from queue import Queue
 import queue
+import json
 
+# TODO
+# Handle Sentinels
+# Handle error codes (X)
 
-#TODO
-#Pause handling
-#Handle Sentinels
-#Handle error codes
-#Handle pause,unpause,reconnect info
-#config
-#Pong event
+#Handle data
 
 # TODO move to __init__.py
 fileConfig('logging_config.ini')
@@ -33,24 +31,20 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         self._uri = kwargs['uri']
         self._info = kwargs['info']
 
-
-        # Keep State of WS
+        # State of WS
         self._connected = Event()
-
         self._paused = Event()
         self._reconnect_scheduled = Event()
 
-
         # Inter-Thread Communication, Producer-consumer queue
         self.pc_queue = kwargs['pc_queue']
-
 
         ##############################
         # WebSocket Protocol
         ##############################
 
-        self.codes={'WS_CONN_CLOSED':0x00000001,'WS_CONN_ERROR':0x00000002,'WS_CONN_OPEN':0x00000004}
-
+        self.codes = {'WS_CONN_CLOSED': 0x00000001, 'WS_CONN_ERROR': 0x00000002, 'WS_CONN_OPEN': 0x00000004,
+                      'WS_CONN_PAUSED': 0x00000008, 'WS_CONN_UNPAUSED': 0x00000010}
 
     def __repr__(self):
 
@@ -81,7 +75,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         return self._reconnect_scheduled.is_set()
 
     @reconnect_scheduled.setter
-    def reconnect_scheduled(self,value):
+    def reconnect_scheduled(self, value):
         if value:
             self._reconnect_scheduled.set()
         else:
@@ -89,7 +83,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
 
     @property
     def paused(self):
-        return self.paused.is_set()
+        return self._paused.is_set()
 
     @paused.setter
     def paused(self, value):
@@ -98,7 +92,11 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         else:
             self._paused.clear()
 
+    @property
+    def terminated(self):
+        return (not self.connected) and (not self.reconnect_scheduled)
 
+    @property
     def ws(self):
         return self._ws
 
@@ -123,6 +121,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
             if self.ws and not self.paused:
                 return func(self, *args, **kwargs)
             else:
+                logger.error('Web Socket paused')
                 return None
 
         return inner
@@ -148,11 +147,14 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         return
 
     def on_message_cb(self, *args):
+        msg_dict, receive_ts = json.loads(args[1]), time.time()
+        self.pc_queue.put((receive_ts, msg_dict))
         self.on_message(*args)
 
     def on_error_cb(self, *args):
         self._connected.clear()
         self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_ERROR'])))
+        logger.error('Callback Error occurred with arguments: ' + str(args))
         self.on_error(*args)
 
     def on_close_cb(self, *args):
@@ -164,8 +166,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         self._connected.set()
         self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_OPEN'])))
         self.on_open(*args)
-
-
 
     ##############################
     # Decorators
@@ -207,9 +207,9 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     ##############################
 
     @_connect_wrapper
-    def connect(self,reconnect=True,time_interval=10):
+    def connect(self, reconnect=True, time_interval=10):
 
-        self._reconnect_scheduled.set() #Can be changed by other Thread (thread-safe)
+        self._reconnect_scheduled.set()  # Can be changed by other Thread (thread-safe)
 
         while self._reconnect_scheduled.is_set():
             try:
@@ -218,7 +218,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
                                                   on_error=self.on_error_cb,
                                                   on_close=self.on_close_cb)
 
-                self._ws.run_forever() #Stopped when connection closed or error
+                self._ws.run_forever()  # Stopped when connection closed or error
 
 
             except websocket.WebSocketException as e:
@@ -230,9 +230,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
                     logger.info('Reconnect to {} scheduled...'.format(self.uri))
                     time.sleep(time_interval)
                     logger.info('Reconnect to {}'.format(self.uri))
-
-
-
 
     @_is_connected.__func__
     @_close_wrapper
@@ -268,8 +265,6 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
         # Inter-Thread Communication
         self._queue = Queue()
-
-
 
     def _state_reset(self):
         self._state_machine = dict()
@@ -347,6 +342,7 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
 
     def _reconnect_wrapper(func):
         """Generic Wrapper"""
+
         def inner(self, *args, **kwargs):
             self._state_reset()
             self.ws.reconnect_scheduled = True
@@ -380,18 +376,21 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
         self.ws.close()
 
         if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
-           self.ws.join()
+            self.ws.join()
 
     @_reconnect_wrapper
     def reconnect(self):
         self.ws.close()
 
     def pause(self):
-        self.ws.paused=True
+        self.ws.paused = True
         logger.info('Paused: ' + str(self.ws.uri))
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_PAUSED'])))
+
     def unpause(self):
         self.ws.paused = False
         logger.info('Unpaused: ' + str(self.ws.uri))
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_UNPAUSED'])))
 
 
 class WebSocketHelpers:

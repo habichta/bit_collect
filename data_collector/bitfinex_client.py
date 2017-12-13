@@ -26,9 +26,9 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
     def run(self):
         self.connect()
 
-        # identifier1 = self.subscribe_to_ticker(pair='tBTCUSD')
-        # identifier2 = self.subscribe_to_trades(symbol='tBTCUSD')
-        identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
+        #identifier1 = self.subscribe_to_ticker(symbol='tBTCUSD')
+        identifier2 = self.subscribe_to_trades(symbol='tBTCUSD')
+        #identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
         #identifier4 = self.subscribe_to_candles(channel='trades', time_frame='1m', symbol='tBTCUSD')
 
         # self.subscribe_to_trades(pair='LTCUSD')
@@ -36,10 +36,11 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
         i = True
         while True:
             self.pop_and_handle(handle_func=self._payload_handler)
-            time.sleep(0.3)
+            time.sleep(0.1)
 
             # self.unsubscribe(identifier2)
             # self.unsubscribe(identifier1)
+
 
 
             if i:
@@ -49,7 +50,6 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
 
 
 
-            #identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
             # self.disconnect()
 
 
