@@ -19,38 +19,39 @@ class BitfinexClient(BitfinexWebsocketConsumer_v1):
     # Client Logic and Main
     ##################################
 
-    def initialize_connection(self):
-        # TODO all subscriptions or auth .. etc.
-        pass
-
-    def run(self):
-        self.connect()
-
-        #identifier1 = self.subscribe_to_ticker(symbol='tBTCUSD')
+    def initialization(self):
         identifier2 = self.subscribe_to_trades(symbol='tBTCUSD')
-        #identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
-        #identifier4 = self.subscribe_to_candles(channel='trades', time_frame='1m', symbol='tBTCUSD')
+
+
+        identifier1 = self.subscribe_to_ticker(symbol='tBTCUSD')
+
+        # identifier3 = self.subscribe_to_book(symbol='tBTCUSD')
+        # identifier4 = self.subscribe_to_candles(channel='trades', time_frame='1m', symbol='tBTCUSD')
 
         # self.subscribe_to_trades(pair='LTCUSD')
 
-        i = True
-        while True:
-            self.pop_and_handle(handle_func=self._payload_handler)
-            time.sleep(0.1)
-
-            # self.unsubscribe(identifier2)
-            # self.unsubscribe(identifier1)
+        q = self.synchronize([identifier2,identifier1])
 
 
+        print(q)
 
-            if i:
-                #self.disconnect()
-                i = False
+    def execution_loop(self,**init_vars):
+        pass
 
 
 
 
-            # self.disconnect()
+
+
+
+
+
+
+
+        # self.unsubscribe(identifier2)
+        # self.unsubscribe(identifier1)
+        # self.disconnect()
+
 
 
 if __name__ == "__main__":

@@ -49,26 +49,10 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
         self.send(self.bitfinex_send_protocol, **request)
 
     def bitfinex_ping(self, **r_args):
-        cid = random.randint(0,2**10)
-        request = {'event': 'ping','cid':cid}
+        cid = random.randint(0, 2 ** 10)
+        request = {'event': 'ping', 'cid': cid}
         self.send(self.bitfinex_send_protocol, **request)
         return time.time(), cid
-
-
-
-    #########################
-    # Producer Callbacks/Optional additional functionality
-    #########################
-
-    def on_message(self, *args):
-        pass
-    def on_close(self, *args):
-        pass
-    def on_open(self, *args):
-        pass
-    def on_error(self, *args):
-        pass
-
 
 
 class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
@@ -86,7 +70,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                                 'subscribed': self._handle_subscribed_event,
                                 'unsubscribed': self._handle_unsubscribed_event,
                                 'pong': self._handle_pong_event}
-        self.pl_info_switch = {20051:self._evt_stop_handler,20060:self._evt_resyc_start_handler,20061:self._evt_resync_stop_handler}
+        self.pl_info_switch = {20051: self._evt_stop_handler, 20060: self._evt_resyc_start_handler,
+                               20061: self._evt_resync_stop_handler}
         self.info_codes = {'20051': 'EVT_STOP', '20060': 'EVT_RESYNC_START', '20061': 'EVT_RESYNC_STOP'}
         # Stop / Restart Websocket Server(please try to reconnect),
         # Refreshing data from the Trading Engine. Pause any activity (wait for 20061),
@@ -126,8 +111,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     @property
     def ws(self):
         return self._ws
-
-
 
     ##################################
     # Open Channels
@@ -182,13 +165,11 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def ping(self):
         if 'pong' in self.state_machine.keys():
-            del(self.state_machine['pong'])
+            del (self.state_machine['pong'])
         return self.ws.bitfinex_ping()
 
-    def config(self): #TODO
+    def config(self):  # TODO
         pass
-
-
 
     ########################################################
     # Internal Functions
@@ -201,14 +182,13 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     ##################################
 
 
-    def _payload_handler(self, payload, **kwargs):  # as argument to pop_and_handle
+    def payload_handler(self, payload, **kwargs):  # as argument to pop_and_handle
 
         logger.debug(payload)
 
         if isinstance(payload[1], AbstractWebSocketProducer.Sentinel):
 
             _sentinel = payload[1]
-            #TODO
 
         else:
 
@@ -241,8 +221,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def _handle_info_event(self, payload, **kwargs):
 
-        msg = payload[1]  # Json message
-        ts = payload[0]  # Receive time stamp
+        ts, msg = payload[0], payload[1]  # receive timestamp, Json message
 
         if 'version' in msg:
             WebSocketHelpers.r_add(self.state_machine, ['version', '_v', msg['version']])
@@ -261,7 +240,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                 WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_msg', info_message])
                 logger.info(str(ts) + ': ' + str(info_code) + ': ' + info_message)
 
-
                 logger.info(str(ts) + ': ' + info_code + ': ' + info_message)
 
                 self.pl_info_switch[info_code]()
@@ -274,8 +252,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def _handle_error_event(self, payload, **kwargs):
         ts, msg = payload[0], payload[1]
-        logger.error(str(ts)+': Web Socket returned error: Code:'+ str(msg['code']) +', Message: '+ str(msg['msg']))
-        #TODO Error handling
+        logger.error(
+            str(ts) + ': Web Socket returned error: Code:' + str(msg['code']) + ', Message: ' + str(msg['msg']))
+        # TODO Error handling
 
     def _handle_subscribed_event(self, payload, **kwargs):
 
@@ -299,8 +278,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
         # Data Queue
         data_queue = Queue()
-        WebSocketHelpers.r_add(self.state_machine, [chanId, '_dataQueue', data_queue])
-        WebSocketHelpers.r_add(self.state_machine, [ident_t, '_dataQueue', data_queue])
+        WebSocketHelpers.r_add_queue(self.state_machine, [chanId, data_queue])
+        WebSocketHelpers.r_add_queue(self.state_machine, [ident_t, data_queue])
 
         ready_event = Event()
         ready_event.set()
@@ -313,16 +292,12 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         del (self.state_machine[chanId])
         del (self.state_machine[identifier])
 
-
     def _handle_pong_event(self, payload, **kwargs):
         ts, msg = payload[0], payload[1]
-        WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_ts',ts])
+        WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_ts', ts])
         WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_recv_ts', msg['ts']])
 
-
-
-
-        ##################################
+    ##################################
     # Bitfinex InfoCode Events
     ##################################
 
@@ -336,12 +311,11 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.reconnect()
         self.unpause()
 
-
     ##################################
     # Bitfinex Data
     ##################################
 
-
+    # TODO Data handling, Heartbeat, snapshots, updates
 
     ##################################
     # Authentication/Security

@@ -13,14 +13,16 @@ import queue
 import json
 
 # TODO
-# Handle Sentinels
-# Handle error codes (X)
-
+#Client interface how to share locals, WebsocketManager? kwargs ...
 #Handle data
-
 # TODO move to __init__.py
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
+
+
+
+queue_name_const= '_dataQueue'
+
 
 
 class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
@@ -43,8 +45,8 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         # WebSocket Protocol
         ##############################
 
-        self.codes = {'WS_CONN_CLOSED': 0x00000001, 'WS_CONN_ERROR': 0x00000002, 'WS_CONN_OPEN': 0x00000004,
-                      'WS_CONN_PAUSED': 0x00000008, 'WS_CONN_UNPAUSED': 0x00000010}
+        self.sentinel_codes = {'WS_CONN_CLOSED': 0x00000001, 'WS_CONN_ERROR': 0x00000002, 'WS_CONN_OPEN': 0x00000004,
+                      'WS_CONN_PAUSED': 0x00000008, 'WS_CONN_UNPAUSED': 0x00000010,'WS_CONN_DISCONNECT':0x00000020}
 
     def __repr__(self):
 
@@ -130,19 +132,19 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     # Parent Callbacks/Abstract Methods
     ###################################
 
-    @abc.abstractmethod
+
     def on_message(self, *args):
         return
 
-    @abc.abstractmethod
+
     def on_error(self, *args):
         return
 
-    @abc.abstractmethod
+
     def on_close(self, *args):
         return
 
-    @abc.abstractmethod
+
     def on_open(self, *args):
         return
 
@@ -153,18 +155,23 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
 
     def on_error_cb(self, *args):
         self._connected.clear()
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_ERROR'])))
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_ERROR'])))
         logger.error('Callback Error occurred with arguments: ' + str(args))
         self.on_error(*args)
 
     def on_close_cb(self, *args):
         self._connected.clear()
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_CLOSED'])))
+
+        if self.reconnect_scheduled:
+            self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_CLOSED'])))
+        else:
+            self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_DISCONNECT'])))
+
         self.on_close(*args)
 
     def on_open_cb(self, *args):
         self._connected.set()
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_OPEN'])))
+        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_OPEN'])))
         self.on_open(*args)
 
     ##############################
@@ -253,6 +260,7 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         def __init__(self, code, *args, **kwargs):
             self.kwargs = kwargs
             self.args = args
+            self.code = code
 
 
 class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
@@ -300,12 +308,37 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     ##############################
     # Abstract Methods
     ##############################
-    @abc.abstractmethod
+
     def run(self):
+
+        self.connect()
+
+        while not self.ws.terminated:
+            self._pop_and_handle()
+            self.execution_loop()
+            time.sleep(0.1)
+
+
+    def _payload_handler(self, payload, **kwargs):
+
+        if isinstance(payload[1], AbstractWebSocketProducer.Sentinel):
+
+            _sentinel = payload[1]
+
+            if _sentinel.code == self.ws.sentinel_codes['WS_CONN_OPEN']:
+                self.initialization()
+
+        self.payload_handler(payload,**kwargs)
+
+    def execution_loop(self):
         return
 
     @abc.abstractmethod
-    def initialize_connection(self):
+    def payload_handler(self,payload, **kwargs):
+        return
+
+    @abc.abstractmethod
+    def initialization(self):
         return
 
     @property
@@ -354,14 +387,29 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     # Consumer Methods
     ##############################
 
-    def pop_and_handle(self, handle_func, block=False, timeout=None, **kwargs):
+    def _pop_and_handle(self, block=False, timeout=None, **kwargs):
 
         try:
             payload = self.pc_queue.get(block=block, timeout=timeout)
-            handle_func(payload=payload, **kwargs)
+            self._payload_handler(payload=payload, **kwargs)
         except queue.Empty as e:  # Move on
+            pass
+            #logger.debug('No messages in producer-consumer queue, ' + str(e))
 
-            logger.debug('No messages in producer-consumer queue, ' + str(e))
+    def synchronize(self,ident_list,**kwargs): #TODO Low level subscribed check _subscribed should be lowest level, better way to synchronize?
+        queue_list = []
+
+        for ident in ident_list:
+            while True:
+                try:
+                    self._pop_and_handle() #TODO Ugly, find other solution
+                    if self.state_machine[ident]['_subscribed'].is_set():
+                        queue_list += [(ident,self.state_machine[ident][queue_name_const])]
+                        break
+                except KeyError:
+                    pass
+
+        return queue_list
 
     @_connect_wrapper
     def connect(self):
@@ -385,12 +433,11 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def pause(self):
         self.ws.paused = True
         logger.info('Paused: ' + str(self.ws.uri))
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_PAUSED'])))
+
 
     def unpause(self):
         self.ws.paused = False
         logger.info('Unpaused: ' + str(self.ws.uri))
-        self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.codes['WS_CONN_UNPAUSED'])))
 
 
 class WebSocketHelpers:
@@ -422,6 +469,18 @@ class WebSocketHelpers:
             except KeyError:
                 d[key] = {}
                 WebSocketHelpers.r_add(d[key], l)
+
+    @staticmethod
+    def r_add_queue(d, l):
+        if len(l) == 1:
+            d[queue_name_const] = l[0]
+        else:
+            key = l.pop(0)
+            try:
+                WebSocketHelpers.r_add_queue(d[key], l)
+            except KeyError:
+                d[key] = {}
+                WebSocketHelpers.r_add_queue(d[key], l)
 
 
 class ProtocolException(Exception):
