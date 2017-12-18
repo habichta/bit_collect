@@ -15,6 +15,7 @@ import json
 # TODO
 #Client interface how to share locals, WebsocketManager? kwargs ...
 #Handle data
+#HitBTC
 # TODO move to __init__.py
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
@@ -481,6 +482,15 @@ class WebSocketHelpers:
             except KeyError:
                 d[key] = {}
                 WebSocketHelpers.r_add_queue(d[key], l)
+
+
+
+class WebsocketManager():
+
+    def __init__(self):
+
+
+
 
 
 class ProtocolException(Exception):

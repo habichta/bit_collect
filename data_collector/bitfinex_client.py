@@ -11,6 +11,9 @@ logger = logging.getLogger()
 config = {}  # TRADES : which pairs
 
 
+
+
+
 class BitfinexClient(BitfinexWebsocketConsumer_v1):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
