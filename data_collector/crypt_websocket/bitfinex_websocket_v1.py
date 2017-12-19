@@ -32,7 +32,6 @@ class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
 
     def bitfinex_send_protocol(self, **kwargs):
         payload = json.dumps(kwargs)
-
         return payload
 
     def bitfinex_subscribe(self, **r_args):
@@ -126,12 +125,14 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         else:
             raise ProtocolException(msg='Symbol needs "t","f" prefix:' + symbol)
 
+
     def subscribe_to_ticker(self, symbol):
 
         if symbol.startswith(('t', 'f')):
             return self.ws.bitfinex_subscribe(channel='ticker', symbol=symbol)
         else:
             raise ProtocolException(msg='Symbol needs "t","f" prefix:' + symbol)
+
 
     def subscribe_to_book(self, symbol, prec=None, freq=None, length=None):
 
@@ -144,6 +145,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         else:
             raise ProtocolException(msg='Symbol needs "t","f" prefix:' + symbol)
 
+
     def subscribe_to_candles(self, channel, time_frame, symbol):
 
         if symbol.startswith(('t', 'f')) and time_frame in self.candle_timeframes:
@@ -152,7 +154,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         else:
             raise ProtocolException(msg='Illegal Symbol or Timeframe for Candles')
 
-    @AbstractWebSocketConsumer._is_subscribed
+
     def unsubscribe(self, identifier):
         self.state_machine[identifier]['_subscribed'].clear()
         channel_id = self.state_machine[identifier]['_chanId']
@@ -168,15 +170,10 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             del (self.state_machine['pong'])
         return self.ws.bitfinex_ping()
 
-    def config(self):  # TODO
-        pass
 
     ########################################################
     # Internal Functions
     ########################################################
-
-
-
     ##################################
     # Handle Producer-Consumer Queue
     ##################################
@@ -187,9 +184,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         logger.debug(payload)
 
         if isinstance(payload[1], AbstractWebSocketProducer.Sentinel):
-
-            _sentinel = payload[1]
-
+            pass
         else:
 
             self.state_machine['hb'] = payload[0]  # Update global Heartbeat with timestamp
@@ -254,7 +249,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         ts, msg = payload[0], payload[1]
         logger.error(
             str(ts) + ': Web Socket returned error: Code:' + str(msg['code']) + ', Message: ' + str(msg['msg']))
-        # TODO Error handling
 
     def _handle_subscribed_event(self, payload, **kwargs):
 
@@ -311,32 +305,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.reconnect()
         self.unpause()
 
-    ##################################
+    ###############################################
     # Bitfinex Data
-    ##################################
+    ###############################################
 
     # TODO Data handling, Heartbeat, snapshots, updates
 
-    ##################################
-    # Authentication/Security
-    ##################################
-
-    def _create_authentication_payload(self, api_secret, api_key):
-
-        nonce = int(time.time() * 1000000)
-        auth_payload = 'AUTH{}'.format(nonce)
-        signature = hmac.new(
-            api_secret.encode(),
-            msg=auth_payload.encode(),
-            digestmod=hashlib.sha384
-        ).hexdigest()
-
-        auth_payload = {
-            'apiKey': api_key,
-            'event': 'auth',
-            'authPayload': auth_payload,
-            'authNonce': nonce,
-            'authSig': signature
-        }
-
-        return auth_payload
