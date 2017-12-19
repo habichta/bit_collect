@@ -26,10 +26,10 @@ queue_name_const= '_dataQueue'
 
 
 
-class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
+class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
-
         super(AbstractWebSocketProducer, self).__init__()
+
         self._ws = None
         self._uri = kwargs['uri']
 
@@ -260,10 +260,9 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
             self.code = code
 
 
-class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
+class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
 
-        super(AbstractWebSocketConsumer, self).__init__()
 
         # Abstract State Machine for connection state
         self._state_reset()
@@ -306,14 +305,6 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     # Abstract Methods
     ##############################
 
-    def run(self):
-
-        self.connect()
-
-        while not self.ws.terminated:
-            self._pop_and_handle()
-            self.execution_loop()
-            time.sleep(0.1)
 
 
     def _payload_handler(self, payload, **kwargs):
@@ -323,19 +314,12 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
             _sentinel = payload[1]
 
             if _sentinel.code == self.ws.sentinel_codes['WS_CONN_OPEN']:
-                self.initialization()
-
+                #self.initialization() #set flag, use flags to communicate with manager, Event dictionary...
+                pass
         self.payload_handler(payload,**kwargs)
-
-    def execution_loop(self):
-        return
 
     @abc.abstractmethod
     def payload_handler(self,payload, **kwargs):
-        return
-
-    #@abc.abstractmethod
-    def initialization(self):
         return
 
     @property
@@ -481,9 +465,10 @@ class WebSocketHelpers:
 
 
 
-class WebsocketManager():
+class WebsocketManager(Thread):
 
     def __init__(self,**kwargs):
+        super(WebsocketManager, self).__init__()
         self.ws_consumer = kwargs['ws_consumer']
 
 
@@ -495,12 +480,26 @@ class WebsocketManager():
 
 
 
-    def start(self,on_init,on_start):
-        self.ws_consumer.start()
+    def connect(self,on_init,on_start):
+        self.on_init=on_init
+        self.on_start=on_start
+        self.start()
+
+    def run(self):
+        _ws_c = self.ws_consumer
+        _ws = _ws_c.ws
+        _ws_c.connect()
 
 
+        self.on_init()
 
 
+        while not _ws.terminated:  # Move Thread logic to Manager all basic execution loops ... , remove thread from abstract consumer and producer, to manager and websocket itself
+            _ws_c._pop_and_handle()
+
+
+            #TODO on run
+            time.sleep(0.1)
 
 
 

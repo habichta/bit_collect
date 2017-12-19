@@ -70,6 +70,6 @@ if __name__ == "__main__":
         pass
 
 
-    bcm.start(on_init=on_init, on_start=on_start)
+    bcm.connect(on_init=on_init, on_start=on_start)
 
 
