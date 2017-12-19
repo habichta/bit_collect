@@ -32,7 +32,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
         super(AbstractWebSocketProducer, self).__init__()
         self._ws = None
         self._uri = kwargs['uri']
-        self._info = kwargs['info']
 
         # State of WS
         self._connected = Event()
@@ -61,9 +60,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     # Properties
     ##############################
 
-    @property
-    def info(self):
-        return self._info
 
     @property
     def uri(self):
@@ -338,7 +334,7 @@ class AbstractWebSocketConsumer(Thread, metaclass=abc.ABCMeta):
     def payload_handler(self,payload, **kwargs):
         return
 
-    @abc.abstractmethod
+    #@abc.abstractmethod
     def initialization(self):
         return
 
@@ -487,7 +483,26 @@ class WebSocketHelpers:
 
 class WebsocketManager():
 
-    def __init__(self):
+    def __init__(self,**kwargs):
+        self.ws_consumer = kwargs['ws_consumer']
+
+
+    @classmethod
+    def create(cls,websocket_uri,ws_type):
+        ws = ws_type(uri=websocket_uri)
+        websocket_manager = cls(ws_consumer=ws)
+        return websocket_manager,ws
+
+
+
+    def start(self,on_init,on_start):
+        self.ws_consumer.start()
+
+
+
+
+
+
 
 
 
