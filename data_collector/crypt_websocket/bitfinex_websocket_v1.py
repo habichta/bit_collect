@@ -1,10 +1,8 @@
-import json
+
 from .abstract_websocket import AbstractWebSocketProducer, AbstractWebSocketConsumer, WebSocketHelpers, \
     ProtocolException
 from logging.config import fileConfig
 import logging
-import hmac
-import hashlib
 import time
 from threading import Event
 from queue import Queue
@@ -18,47 +16,12 @@ logger = logging.getLogger()
 logger.setLevel('DEBUG')
 
 
-class BitfinexWebsocketProducer_v1(AbstractWebSocketProducer):
-    """
-    Implement Bitfinex Protocol V1, Producer side
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    #########################
-    # Exchange Protocol
-    #########################
-
-    def bitfinex_send_protocol(self, **kwargs):
-        payload = json.dumps(kwargs)
-        return payload
-
-    def bitfinex_subscribe(self, **r_args):
-        request = {'event': 'subscribe'}
-        request.update(r_args)
-        identifier = tuple(r_args.values())  # For unsubscribing
-        self.send(self.bitfinex_send_protocol, **request)
-
-        return identifier
-
-    def bitfinex_unsubscribe(self, **r_args):
-        request = {'event': 'unsubscribe'}
-        request.update(r_args)
-        self.send(self.bitfinex_send_protocol, **request)
-
-    def bitfinex_ping(self, **r_args):
-        cid = random.randint(0, 2 ** 10)
-        request = {'event': 'ping', 'cid': cid}
-        self.send(self.bitfinex_send_protocol, **request)
-        return time.time(), cid
-
 
 class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._ws = BitfinexWebsocketProducer_v1(pc_queue=self.pc_queue, **kwargs)
+        self._ws = AbstractWebSocketProducer(pc_queue=self.pc_queue, **kwargs)
 
         ##################################
         # BitFinex Protocol
@@ -118,10 +81,33 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     # Subscribing/Unsubscribing
     ##################################
 
+    def subscribe(self, **r_args):
+        request = {'event': 'subscribe'}
+        request.update(r_args)
+        identifier = tuple(r_args.values())  # For unsubscribing
+        self.request_notification(identifier,**request)
+
+        return identifier
+
+    def unsubscribe(self,identifier):
+        channel_id =self.get_state_value([identifier,'_chanId'])
+        request = {'event': 'unsubscribe','chanID':channel_id}
+        self.stop_notification(identifier, **request)
+
+    def unsubscribe_all(self):
+        self.stop_all_notifications(self.unsubscribe)
+
+    def bitfinex_ping(self):
+        cid = random.randint(0, 2 ** 10)
+        request = {'event': 'ping', 'cid': cid}
+        self.remote_procedure_call(cid,**request)
+        return time.time(), cid
+
+
     def subscribe_to_trades(self, symbol):
 
         if symbol.startswith(('t', 'f')):
-            return self.ws.bitfinex_subscribe(channel='trades', symbol=symbol)
+            return self.subscribe(channel='trades', symbol=symbol)
         else:
             raise ProtocolException(msg='Symbol needs "t","f" prefix:' + symbol)
 
@@ -129,7 +115,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     def subscribe_to_ticker(self, symbol):
 
         if symbol.startswith(('t', 'f')):
-            return self.ws.bitfinex_subscribe(channel='ticker', symbol=symbol)
+            return self.subscribe(channel='ticker', symbol=symbol)
         else:
             raise ProtocolException(msg='Symbol needs "t","f" prefix:' + symbol)
 
@@ -141,7 +127,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         length = self.book_ch_def['length'] if length is None else str(length)
 
         if symbol.startswith(('t', 'f')):
-            return self.ws.bitfinex_subscribe(channel='book', symbol=symbol, prec=prec, freq=freq, length=length)
+            return self.subscribe(channel='book', symbol=symbol, prec=prec, freq=freq, length=length)
         else:
             raise ProtocolException(msg='Symbol needs "t","f" prefix:' + symbol)
 
@@ -150,25 +136,14 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
         if symbol.startswith(('t', 'f')) and time_frame in self.candle_timeframes:
             key = ':'.join([channel, time_frame, symbol])
-            return self.ws.bitfinex_subscribe(channel='candles', key=key)
+            return self.subscribe(channel='candles', key=key)
         else:
             raise ProtocolException(msg='Illegal Symbol or Timeframe for Candles')
 
 
-    def unsubscribe(self, identifier):
-        self.state_machine[identifier]['_subscribed'].clear()
-        channel_id = self.state_machine[identifier]['_chanId']
-        self.ws.bitfinex_unsubscribe(chanId=int(channel_id))
-
-    def unsubscribe_all(self):
-        for k in self.state_machine.keys():
-            if '_subscribed' in k.keys():
-                self.unsubscribe(k)
-
     def ping(self):
-        if 'pong' in self.state_machine.keys():
-            del (self.state_machine['pong'])
-        return self.ws.bitfinex_ping()
+        self.remove_state_value(['pong'])
+        return self.bitfinex_ping()
 
 
     ########################################################
@@ -187,7 +162,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             pass
         else:
 
-            self.state_machine['hb'] = payload[0]  # Update global Heartbeat with timestamp
+            self.add_state_value(['hb', payload[0]])
 
             if isinstance(payload[1], dict):  # events are dictionaries
                 self.pl_type_switch['event'](payload=payload, **kwargs)
@@ -219,8 +194,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         ts, msg = payload[0], payload[1]  # receive timestamp, Json message
 
         if 'version' in msg:
-            WebSocketHelpers.r_add(self.state_machine, ['version', '_v', msg['version']])
-            WebSocketHelpers.r_add(self.state_machine, ['version', '_ts', ts])
+            self.add_state_value(['version', '_v', msg['version']])
+            self.add_state_value(['version', '_ts', ts])
 
 
         elif 'code' in msg:
@@ -231,8 +206,9 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                 except KeyError:
                     info_message = None
 
-                WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_ts', ts])
-                WebSocketHelpers.r_add(self.state_machine, ['info', info_code, '_msg', info_message])
+                self.add_state_value(['info', info_code, '_ts', ts])
+                self.add_state_value( ['info', info_code, '_msg', info_message])
+
                 logger.info(str(ts) + ': ' + str(info_code) + ': ' + info_message)
 
                 logger.info(str(ts) + ': ' + info_code + ': ' + info_message)
@@ -256,9 +232,10 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         chanId = msg['chanId']
 
         for k, v in msg.items():
-            WebSocketHelpers.r_add(self.state_machine, [chanId, '_' + str(k), v])
-        WebSocketHelpers.r_add(self.state_machine, [chanId, '_ts', ts])  # Subscrition Time stamp
-        WebSocketHelpers.r_add(self.state_machine, [chanId, '_hb', ts])  # Time stamp last message (Channel Heartbeat)
+            self.add_state_value([chanId, '_' + str(k), v])
+
+        self.add_state_value([chanId, '_ts', ts]) # Subscrition Time stamp
+        self.add_state_value([chanId, '_hb', ts]) # Time stamp last message (Channel Heartbeat)
 
         # Create identifier that maps to channel id (for unsubscription)
 
@@ -267,29 +244,31 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             if e in msg.keys():
                 identifier += [msg[e]]
         ident_t = tuple(identifier)
-        WebSocketHelpers.r_add(self.state_machine, [ident_t, '_chanId', chanId])
-        WebSocketHelpers.r_add(self.state_machine, [chanId, '_identifier', ident_t])
+        self.add_state_value([ident_t, '_chanId', chanId])
+        self.add_state_value([chanId, '_identifier', ident_t])
 
-        # Data Queue
+
+        # Data Queue,
         data_queue = Queue()
-        WebSocketHelpers.r_add_queue(self.state_machine, [chanId, data_queue])
-        WebSocketHelpers.r_add_queue(self.state_machine, [ident_t, data_queue])
+        self.add_queue([chanId, data_queue])
+        self.add_queue([ident_t, data_queue])
 
-        ready_event = Event()
-        ready_event.set()
-        WebSocketHelpers.r_add(self.state_machine, [ident_t, '_subscribed', ready_event])
+        self.set_notification_state(ident_t,ready=True)
 
     def _handle_unsubscribed_event(self, payload, **kwargs):
         ts, msg = payload[0], payload[1]  # Json message
         chanId = msg['chanId']
-        identifier = self.state_machine[chanId]['_identifier']
-        del (self.state_machine[chanId])
-        del (self.state_machine[identifier])
+        identifier = self.get_state_value([chanId,'_identifier'])
+        self.set_notification_state(identifier, ready=False)
+        self.remove_state_value([chanId])
+        self.remove_state_value([identifier])
+
 
     def _handle_pong_event(self, payload, **kwargs):
         ts, msg = payload[0], payload[1]
-        WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_ts', ts])
-        WebSocketHelpers.r_add(self.state_machine, ['pong', msg['cid'], '_recv_ts', msg['ts']])
+        self.add_state_value(['pong', msg['cid'], '_ts', ts])
+        self.add_state_value( ['pong', msg['cid'], '_recv_ts', msg['ts']])
+
 
     ##################################
     # Bitfinex InfoCode Events
