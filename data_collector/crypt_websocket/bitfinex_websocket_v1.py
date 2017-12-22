@@ -90,7 +90,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     def unsubscribe(self,identifier):
         channel_id =self.get_state_value([identifier,'_chanId'])
-        request = {'event': 'unsubscribe','chanID':channel_id}
+        request = {'event': 'unsubscribe','chanId':channel_id}
         self.stop_notification(identifier, **request)
 
     def unsubscribe_all(self):
@@ -245,12 +245,6 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         ident_t = tuple(identifier)
         self.add_state_value([ident_t, '_chanId', chanId])
         self.add_state_value([chanId, '_identifier', ident_t])
-
-
-        # Data Queue,
-        data_queue = Queue()
-        self.add_queue([chanId, data_queue])
-        self.add_queue([ident_t, data_queue])
 
         self.set_notification_state(ident_t,ready=True)
 
