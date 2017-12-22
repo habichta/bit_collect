@@ -4,11 +4,10 @@ from .abstract_websocket import AbstractWebSocketProducer, AbstractWebSocketCons
 from logging.config import fileConfig
 import logging
 import time
-from threading import Event
 from queue import Queue
 import random
 
-from pprint import pprint
+
 
 # TODO move to __init__.py
 fileConfig('logging_config.ini')
@@ -254,6 +253,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         self.add_queue([ident_t, data_queue])
 
         self.set_notification_state(ident_t,ready=True)
+
 
     def _handle_unsubscribed_event(self, payload, **kwargs):
         ts, msg = payload[0], payload[1]  # Json message

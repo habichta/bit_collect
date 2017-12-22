@@ -13,15 +13,16 @@ import queue
 import json
 from functools import reduce
 import operator
+from pprint import pprint
 
 # TODO
 
-#Handle notifications, sub,unsub
-#Handle RPC (only one queue)?
-#Synchronization object. Where to put self.state_machine[identifier][notification_name].is_set(), we need a place to put those in ... sync => ident => event
-#Synchronize for manager after ident
-#Transfer vars to on_start or just Thread start?  Need a thread start method that stops thread when websocket down => Thread start through manager, create loop that asks for terminator var.
-#create functions to simplify protocol implement ... z.b. add queue,  add sync var ...   and methods to change them .. maybe all in a deorator that only needs to be added ...
+# Handle notifications, sub,unsub
+# Handle RPC (only one queue)?
+# Synchronization object. Where to put self.state_machine[identifier][notification_name].is_set(), we need a place to put those in ... sync => ident => event
+# Synchronize for manager after ident
+# Transfer vars to on_start or just Thread start?  Need a thread start method that stops thread when websocket down => Thread start through manager, create loop that asks for terminator var.
+# create functions to simplify protocol implement ... z.b. add queue,  add sync var ...   and methods to change them .. maybe all in a deorator that only needs to be added ...
 
 # Database, data handler
 
@@ -31,15 +32,11 @@ import operator
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
 
+queue_name_const = '_dataQueue'
+notification_name = '_notification'
 
 
-queue_name_const= '_dataQueue'
-sync_name = '_sync'
-notification_name ='_notification'
-
-
-
-class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
+class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
         super(AbstractWebSocketProducer, self).__init__()
 
@@ -59,15 +56,17 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
         ##############################
 
         self.sentinel_codes = {'WS_CONN_CLOSED': 0x00000001, 'WS_CONN_ERROR': 0x00000002, 'WS_CONN_OPEN': 0x00000004,
-                      'WS_CONN_PAUSED': 0x00000008, 'WS_CONN_UNPAUSED': 0x00000010,'WS_CONN_DISCONNECT':0x00000020}
+                               'WS_CONN_PAUSED': 0x00000008, 'WS_CONN_UNPAUSED': 0x00000010,
+                               'WS_CONN_DISCONNECT': 0x00000020}
 
     def __repr__(self):
 
         _s = super().__repr__() + ', WebSocket for ' + str(self._uri)
         return _s
 
+
     def run(self):
-        self.connect()
+        self._connect()
 
     ##############################
     # Properties
@@ -142,7 +141,7 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
     # Parent Callbacks/Abstract Methods
     ###################################
 
-    """
+
     def on_message(self, *args):
         return
 
@@ -157,7 +156,8 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
 
     def on_open(self, *args):
         return
-    """
+
+
     def on_message_cb(self, *args):
         msg_dict, receive_ts = json.loads(args[1]), time.time()
         self.pc_queue.put((receive_ts, msg_dict))
@@ -173,9 +173,11 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
         self._connected.clear()
 
         if self.reconnect_scheduled:
-            self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_CLOSED'])))
+            self.pc_queue.put(
+                (time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_CLOSED'])))
         else:
-            self.pc_queue.put((time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_DISCONNECT'])))
+            self.pc_queue.put(
+                (time.time(), AbstractWebSocketProducer.Sentinel(code=self.sentinel_codes['WS_CONN_DISCONNECT'])))
 
         self.on_close(*args)
 
@@ -262,7 +264,8 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
     @_is_connected.__func__
     @_send_wrapper
     def _send(self, protocol_func, **kwargs):
-        payload = protocol_func(**kwargs)
+        payload = protocol_func(self,**kwargs)
+        print(payload)
         try:
             self._ws.send(payload)
         except websocket.WebSocketException as e:
@@ -277,7 +280,6 @@ class AbstractWebSocketProducer(Thread,metaclass=abc.ABCMeta):
 
 class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
-
 
         # Abstract State Machine for connection state
         self._state_reset()
@@ -299,13 +301,6 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
     def pc_queue(self):  # Producer-consumer queue
         return self._queue
 
-    ##############################
-    #Basic Functions
-    ##############################
-
-
-
-
 
     ##############################
     # Abstract Methods
@@ -313,7 +308,7 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def payload_handler(self,payload, **kwargs):
+    def payload_handler(self, payload, **kwargs):
         return
 
     @property
@@ -358,6 +353,7 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
 
         return inner
 
+
     ##############################
     # Consumer Methods
     ##############################
@@ -373,19 +369,19 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
 
     @_disconnect_wrapper
     def disconnect(self):
-        self.ws.close()
+        self.ws._close()
 
         if self.ws is not None and self.ws.ident:  # Check if Producer Websocket Thread is running
             self.ws.join()
 
     @_reconnect_wrapper
     def reconnect(self):
-        self.ws.close()
+        self.ws._close()
+
 
     def pause(self):
         self.ws.paused = True
         logger.info('Paused: ' + str(self.ws.uri))
-
 
     def unpause(self):
         self.ws.paused = False
@@ -396,21 +392,19 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
         return payload
 
     def request_notification(self, identifier, send_protocol=_json_object, **kwargs):
-        WebSocketHelpers.r_add_sync_state(self.state_machine, identifier)
-        self.ws._send(protocol_func=send_protocol, **kwargs)
+        if not self.get_notification_state(identifier):
+            WebSocketHelpers.r_add_sync_state(self.state_machine, identifier)
+            self.ws._send(protocol_func=send_protocol, **kwargs)
 
     def stop_notification(self, identifier, send_protocol=_json_object, **kwargs):
-        try:
-            if self.state_machine[identifier][notification_name].is_set():
-                self.ws._send(protocol_func=send_protocol, **kwargs)
-        except KeyError:
-            return None
+        if self.get_notification_state(identifier):
+            self.ws._send(protocol_func=send_protocol, **kwargs)
 
     def get_all_notifications(self):
         notification_ids = []
         for k in self.state_machine.keys():
             try:
-                if self.state_machine[k][notification_name].is_set():
+                if self.get_notification_state(k):
                     notification_ids += [k]
             except KeyError:
                 pass
@@ -421,40 +415,48 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
         for k in identifiers:
             handle_func(k)
 
-    def set_notification_state(self, identifier,ready=True):
+    def set_notification_state(self, identifier, ready=True):
         try:
             if ready:
-                self.state_machine[identifier][notification_name].set()
+                self.state_machine[notification_name][identifier].set()
             else:
-                self.state_machine[identifier][notification_name].clear()
+                self.state_machine[notification_name][identifier].clear()
         except KeyError:
             pass
 
+    def get_notification_state(self,identifier):
+        try:
+            _set =  self.state_machine[notification_name][identifier].is_set()
+            return _set
+        except KeyError:
+            return False
 
     def remote_procedure_call(self, identifier, send_protocol=_json_object,
                               **kwargs):  # return one rpc queue for responses, id given by user, or generated and returned as well..
         self.ws._send(protocol_func=send_protocol, **kwargs)
 
-
-    def get_state_value(self,key_list):
+    def get_state_value(self, key_list):
         try:
-            return reduce(operator.getitem,self.state_machine,key_list)
+            return reduce(operator.getitem, key_list, self.state_machine)
         except KeyError:
-            logger.error('Keys '+str(key_list) + 'do not exist in state')
+            logger.error('Keys ' + str(key_list) + 'do not exist in state')
             return None
 
-    def add_state_value(self,input_list):
-                WebSocketHelpers.r_add(self.state_machine,input_list)
+    def add_state_value(self, input_list):
+        WebSocketHelpers.r_add(self.state_machine, input_list)
 
-    def remove_state_value(self,input_list):
-               try:
-                   *h,t = input_list
-                   del reduce(operator.getitem,h,self.state_machine)[t]
-               except KeyError:
-                   pass
+    def remove_state_value(self, input_list):
+        try:
+            *h, t = input_list
+            del reduce(operator.getitem, h, self.state_machine)[t]
+        except KeyError:
+            pass
 
-    def add_queue(self,input_list):
-                WebSocketHelpers.r_add_queue(self.state_machine,input_list)
+
+
+
+    def add_queue(self, input_list):
+        WebSocketHelpers.r_add_queue(self.state_machine, input_list)
 
     """
     def synchronize(self,ident_list,**kwargs): #TODO Low level subscribed check _subscribed should be lowest level, better way to synchronize?
@@ -472,6 +474,7 @@ class AbstractWebSocketConsumer(metaclass=abc.ABCMeta):
 
         return queue_list
     """
+
 
 class WebSocketHelpers:
     @staticmethod
@@ -503,16 +506,6 @@ class WebSocketHelpers:
                 d[key] = {}
                 WebSocketHelpers.r_add(d[key], l)
 
-    def r_remove(d, l):
-        if len(l) == 0:
-            del(d)
-        else:
-            key = l.pop(0)
-            try:
-                WebSocketHelpers.r_add(d[key], l)
-            except KeyError:
-                pass
-
 
     @staticmethod
     def r_add_queue(d, l):
@@ -527,28 +520,24 @@ class WebSocketHelpers:
                 WebSocketHelpers.r_add_queue(d[key], l)
 
     @staticmethod
-    def r_add_sync_state(d,identifier):
-        WebSocketHelpers.r_add(d,[sync_name,identifier,Event()])
+    def r_add_sync_state(d, identifier):
+        WebSocketHelpers.r_add(d, [notification_name, identifier, Event()])
 
 
 class WebsocketManager(Thread):
-
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         super(WebsocketManager, self).__init__()
         self.ws_c = kwargs['ws_consumer']
 
-
     @classmethod
-    def create(cls,websocket_uri,ws_type):
+    def create(cls, websocket_uri, ws_type):
         _ws_c = ws_type(uri=websocket_uri)
         _websocket_manager = cls(ws_consumer=_ws_c)
-        return _websocket_manager,_ws_c
+        return _websocket_manager, _ws_c
 
-
-
-    def connect(self,on_init,on_start):
-        self.on_init=on_init
-        self.on_start=on_start
+    def connect(self, on_init, on_start):
+        self.on_init = on_init
+        self.on_start = on_start
         self.start()
 
     def run(self):
@@ -556,13 +545,10 @@ class WebsocketManager(Thread):
         _ws = _ws_c.ws
         _ws_c.connect()
 
-
         while not _ws.terminated:  # Move Thread logic to Manager all basic execution loops ... , remove thread from abstract consumer and producer, to manager and websocket itself
             self._pop_and_handle()
-            #TODO on run
+            # TODO on run
             time.sleep(0.1)
-
-
 
     def _sentinel_handler(self, payload, **kwargs):
 
@@ -571,9 +557,7 @@ class WebsocketManager(Thread):
             _sentinel = payload[1]
 
             if _sentinel.code == self.ws_c.ws.sentinel_codes['WS_CONN_OPEN']:
-                self.on_init() #set flag, use flags to communicate with manager, Event dictionary...
-
-        self.ws_c.payload_handler(payload,**kwargs)
+                self.on_init()  # set flag, use flags to communicate with manager, Event dictionary...
 
 
 
@@ -582,10 +566,9 @@ class WebsocketManager(Thread):
         try:
             payload = self.ws_c.pc_queue.get(block=block, timeout=timeout)
             self._sentinel_handler(payload=payload, **kwargs)
+            self.ws_c.payload_handler(payload, **kwargs)
         except queue.Empty:
             pass
-
-
 
 
 class ProtocolException(Exception):

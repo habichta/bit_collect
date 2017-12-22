@@ -10,15 +10,20 @@ if __name__ == "__main__":
 
 
     def on_init():
+
+
         identifier2 = bc.subscribe_to_trades(symbol='tBTCUSD')
+        bc.ping()
         #identifier1 = bc.subscribe_to_ticker(symbol='tBTCUSD')
         # identifier3 = bc.subscribe_to_book(symbol='tBTCUSD')
         # identifier4 = bc.subscribe_to_candles(channel='trades', time_frame='1m', symbol='tBTCUSD')
         #q = bc.synchronize([identifier2, identifier1])
 
-        # bc.unsubscribe(identifier1)
-        #bc.disconnect()
-        #bc.reconnect()
+        if bc.get_notification_state(identifier2):
+            bc.unsubscribe(identifier2)
+
+
+
 
 
     def on_start():
