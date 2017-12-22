@@ -1,6 +1,5 @@
 from crypt_websocket.bitfinex_websocket_v1 import BitfinexWebsocketConsumer_v1
 from crypt_websocket.abstract_websocket import WebsocketManager
-from time import time
 
 
 
@@ -13,28 +12,25 @@ if __name__ == "__main__":
 
     def on_run():
 
-        identifier2 = bc.subscribe_to_trades(symbol='tBTCUSD')
-        identifier3 = bc.subscribe_to_book(symbol='tBTCUSD')
-        bc.ping()
-        # identifier1 = bc.subscribe_to_ticker(symbol='tBTCUSD')
+        #identifier2 = bc.subscribe_to_trades(symbol='tBTCUSD')
+        #identifier3 = bc.subscribe_to_book(symbol='tBTCUSD')
+        cid = bc.ping()
+        identifier1 = bc.subscribe_to_ticker(symbol='tBTCUSD')
         # identifier3 = bc.subscribe_to_book(symbol='tBTCUSD')
         # identifier4 = bc.subscribe_to_candles(channel='trades', time_frame='1m', symbol='tBTCUSD')
         # q = bc.synchronize([identifier2, identifier1])
 
-        bc.synchronize([identifier2, identifier3])
+        #bc.synchronize([identifier2, identifier3])
 
 
 
-
-        bc.unsubscribe(identifier2)
-
-        while bcm.running:
-            pass
-
-        
+        #print(bc.state_machine)
+        #bc.unsubscribe(identifier2)
 
 
 
+        #while bcm.running:
+         #   pass
 
 
         '''

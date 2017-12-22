@@ -33,6 +33,8 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
                                 'pong': self._handle_pong_event}
         self.pl_info_switch = {20051: self._evt_stop_handler, 20060: self._evt_resyc_start_handler,
                                20061: self._evt_resync_stop_handler}
+        self.pl_data_switch = {'ticker': self._handle_data_ticker, 'trades': self._handle_data_trades,
+                               'books': self._handle_data_books,'candles': self._handle_data_candles}
         self.info_codes = {'20051': 'EVT_STOP', '20060': 'EVT_RESYNC_START', '20061': 'EVT_RESYNC_STOP'}
         # Stop / Restart Websocket Server(please try to reconnect),
         # Refreshing data from the Trading Engine. Pause any activity (wait for 20061),
@@ -161,7 +163,7 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
             pass
         else:
 
-            self.add_state_value(['hb', payload[0]])
+            self.add_state_value(['_hb', payload[0]])
 
             if isinstance(payload[1], dict):  # events are dictionaries
                 self.pl_type_switch['event'](payload=payload, **kwargs)
@@ -178,8 +180,17 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
         except Exception as e:
             logger.error(str(e) + ', got: ' + str(event_type))
 
-    def _handle_data(self, **kwargs):
-        pass
+    def _handle_data(self, payload, **kwargs):
+
+        chanId = payload[1][0]
+        identifier = self.get_state_value([chanId])['_identifier']
+        self.add_state_value([chanId, '_hb', payload[0]])
+        if  payload[1][1] == 'hb':
+            pass
+        else:
+            chan_type = self.get_state_value([chanId])['_channel']
+            self.pl_data_switch[chan_type](chanId= chanId,identifier=identifier,payload=payload, **kwargs)
+
 
     ##################################
     # Consumer Callbacks
@@ -282,5 +293,14 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
     # Bitfinex Data
     ###############################################
 
-    # TODO Data handling, Heartbeat, snapshots, updates
+    #TODO: move to data queue, handle snapshots and books algorithm
+    def _handle_data_ticker(self,chanId,identifier,payload, **kwargs):
+        pass
+    def _handle_data_trades(self,chanId,identifier,payload, **kwargs):
+        pass
+
+    def _handle_data_books(self,chanId,identifier,payload, **kwargs):
+        pass
+    def _handle_data_candles(self,chanId,identifier,payload, **kwargs):
+        pass
 

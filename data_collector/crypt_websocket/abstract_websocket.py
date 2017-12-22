@@ -3,8 +3,6 @@ from threading import Thread
 from threading import Event
 import time
 from datetime import datetime
-import logging
-from logging.config import fileConfig
 import abc
 import threading
 import collections
@@ -13,26 +11,19 @@ import queue
 import json
 from functools import reduce
 import operator
-from pprint import pprint
+import logging
+from logging.config import fileConfig
+
+
 
 # TODO
-
-# failed subscription
-# Handle RPC (only one queue)?
-# Synchronization object. Where to put self.state_machine[identifier][notification_name].is_set(), we need a place to put those in ... sync => ident => event
-# Synchronize for manager after ident
-# Transfer vars to on_start or just Thread start?  Need a thread start method that stops thread when websocket down => Thread start through manager, create loop that asks for terminator var.
-# create functions to simplify protocol implement ... z.b. add queue,  add sync var ...   and methods to change them .. maybe all in a deorator that only needs to be added ...
-#TODO: connection break down trigger restart of all threads for a particular WS/Manager because new queues are allocated on reconnect. This may not be desirable..
-
+# Sentinels need to be handled by client, maybe find lower-level solution later..
 # Database, data handler
-
 # Front end
 
-#  TODO move to __init__.py
+
 fileConfig('logging_config.ini')
 logger = logging.getLogger()
-
 queue_name_const = '_dataQueue'
 notification_name = '_notification'
 
@@ -267,7 +258,6 @@ class AbstractWebSocketProducer(Thread, metaclass=abc.ABCMeta):
     @_send_wrapper
     def _send(self, protocol_func, **kwargs):
         payload = protocol_func(self,**kwargs)
-        print(payload)
         try:
             self._ws.send(payload)
         except websocket.WebSocketException as e:
