@@ -295,12 +295,34 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
     #TODO: move to data queue, handle snapshots and books algorithm
     def _handle_data_ticker(self,chanId,identifier,payload, **kwargs):
-        pass
+        self.data_queue.put((payload[0],identifier,chanId,payload[1]))
+
+
     def _handle_data_trades(self,chanId,identifier,payload, **kwargs):
-        pass
+
+        data = payload[1]
+        if isinstance(data[1],list): #Snapshot
+                [self.data_queue.put((payload[0],identifier,chanId,p)) for p in data[1]]
+        else:
+            self.data_queue.put((payload[0], identifier, chanId, data[1]))
+
+
 
     def _handle_data_books(self,chanId,identifier,payload, **kwargs):
+
+        if self.get_state_value([chanId,'_prec']) == 'R0':
+            #safe snapshot in memory
+            #Raw Order Book
+            pass
+
+        else:
+            #safe snapshot in memory
+            #Orderbook
+            pass
+
+
         pass
+
     def _handle_data_candles(self,chanId,identifier,payload, **kwargs):
-        pass
+       self._handle_data_trades(chanId,identifier,payload,**kwargs)
 
