@@ -309,19 +309,63 @@ class BitfinexWebsocketConsumer_v1(AbstractWebSocketConsumer):
 
 
     def _handle_data_books(self,chanId,identifier,payload, **kwargs):
+        data = payload[1]
 
         if self.get_state_value([chanId,'_prec']) == 'R0':
-            #safe snapshot in memory
-            #Raw Order Book
-            pass
+            if isinstance(data[1], list):  # Snapshot
+                for msg in data[1]:
+                    self._update_raw_order_book(msg, chanId)
+            else:
+                self._update_raw_order_book(data[1], chanId)
 
         else:
-            #safe snapshot in memory
-            #Orderbook
-            pass
+
+            if isinstance(data[1],list): #Snapshot
+                for msg in data[1]:
+                    self._update_order_book(msg,chanId)
+            else:
+                self._update_order_book(data[1],chanId)
+
+        self.data_queue.put((payload[0], identifier, chanId, self.get_state_value([chanId, '_book'])))
 
 
-        pass
+    def _update_order_book(self,msg,chanId):
+
+        order = {'price': msg[0], 'count': msg[1], 'amount': msg[2]}
+        if order['count'] > 0:
+
+            if order['amount'] > 0:
+                self.add_state_value([chanId, '_book', '_bids', order['price'], order])
+            elif order['amount'] < 0:
+                self.add_state_value([chanId, '_book', '_asks', order['price'], order])
+            else:
+                logger.error('Invalid amount for order book')
+        else:
+            if order['amount'] == 1:
+                self.remove_state_value([chanId, '_book', '_bids', order['price']])
+            elif order['amount'] == -1:
+                self.remove_state_value([chanId, '_book', '_asks', order['price']])
+            else:
+                logger.error('Invalid amount for order book')
+
+    def _update_raw_order_book(self, msg, chanId):
+        order = {'order_id': msg[0], 'price': msg[1], 'amount': msg[2]}
+
+        if order['price'] > 0:
+
+            if order['amount'] > 0:
+                self.add_state_value([chanId, '_book', '_bids', order['price'],order['order_id'], order])
+            elif order['amount'] < 0:
+                self.add_state_value([chanId, '_book', '_asks', order['price'],order['order_id'], order])
+
+        elif order['price'] == 0:
+            if order['amount'] > 0:
+                self.remove_state_value([chanId, '_book', '_bids', order['price'],order['order_id']])
+            elif order['amount'] < 0:
+                self.remove_state_value([chanId, '_book', '_asks', order['price'],order['order_id']])
+
+        else:
+            logger.error('Invalid price for raw order book')
 
     def _handle_data_candles(self,chanId,identifier,payload, **kwargs):
        self._handle_data_trades(chanId,identifier,payload,**kwargs)
