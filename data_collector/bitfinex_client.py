@@ -2,7 +2,7 @@ from crypt_websocket.bitfinex_websocket_v1 import BitfinexWebsocketConsumer_v1
 from crypt_websocket.abstract_websocket import WebsocketManager
 
 
-
+#TODO Testing, Database, Define Data Shape/Model
 
 if __name__ == "__main__":
 
